@@ -47,6 +47,7 @@ public class AdminDashboard {
         menu.setPrefWidth(200);
         
         Button[] menuButtons = {
+            createMenuButton("Dashboard Statistics"),
             createMenuButton("Manage Courses"),
             createMenuButton("Manage Subjects"),
             createMenuButton("Manage Classes"),
@@ -55,19 +56,20 @@ public class AdminDashboard {
             createMenuButton("Defaulter List")
         };
         
-        menuButtons[0].setOnAction(e -> showManageCourses());
-        menuButtons[1].setOnAction(e -> showManageSubjects());
-        menuButtons[2].setOnAction(e -> showManageClasses());
-        menuButtons[3].setOnAction(e -> showManageStudents());
-        menuButtons[4].setOnAction(e -> showAssignTeachers());
-        menuButtons[5].setOnAction(e -> showDefaulterList());
+        menuButtons[0].setOnAction(e -> showDashboardStatistics());
+        menuButtons[1].setOnAction(e -> showManageCourses());
+        menuButtons[2].setOnAction(e -> showManageSubjects());
+        menuButtons[3].setOnAction(e -> showManageClasses());
+        menuButtons[4].setOnAction(e -> showManageStudents());
+        menuButtons[5].setOnAction(e -> showAssignTeachers());
+        menuButtons[6].setOnAction(e -> showDefaulterList());
         
         menu.getChildren().addAll(menuButtons);
         
         mainLayout.setTop(topBar);
         mainLayout.setLeft(menu);
         
-        showManageCourses();
+        showDashboardStatistics();
         
         Scene scene = new Scene(mainLayout, 1200, 700);
         stage.setScene(scene);
@@ -81,6 +83,201 @@ public class AdminDashboard {
         btn.setOnMouseEntered(e -> btn.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-alignment: CENTER-LEFT; -fx-padding: 12; -fx-cursor: hand;"));
         btn.setOnMouseExited(e -> btn.setStyle("-fx-background-color: transparent; -fx-text-fill: white; -fx-alignment: CENTER-LEFT; -fx-padding: 12; -fx-cursor: hand;"));
         return btn;
+    }
+    
+    private void showDashboardStatistics() {
+        VBox content = new VBox(20);
+        content.setPadding(new Insets(30));
+        
+        Label title = new Label("Dashboard Statistics");
+        title.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
+        
+        // Statistics cards container
+        GridPane statsGrid = new GridPane();
+        statsGrid.setHgap(20);
+        statsGrid.setVgap(20);
+        
+        try (Connection conn = DatabaseConfig.getConnection()) {
+            // Total Courses
+            VBox courseCard = createStatCard("Total Courses", getCount(conn, "SELECT COUNT(*) FROM courses"), "#3498db");
+            
+            // Total Subjects
+            VBox subjectCard = createStatCard("Total Subjects", getCount(conn, "SELECT COUNT(*) FROM subjects"), "#9b59b6");
+            
+            // Total Classes
+            VBox classCard = createStatCard("Total Classes", getCount(conn, "SELECT COUNT(*) FROM classes"), "#e67e22");
+            
+            // Total Students
+            VBox studentCard = createStatCard("Total Students", getCount(conn, "SELECT COUNT(*) FROM users WHERE role = 'STUDENT'"), "#27ae60");
+            
+            // Total Teachers
+            VBox teacherCard = createStatCard("Total Teachers", getCount(conn, "SELECT COUNT(*) FROM users WHERE role = 'TEACHER'"), "#f39c12");
+            
+            // Total Defaulters
+            int defaulterCount = getDefaulterCount(conn);
+            VBox defaulterCard = createStatCard("Total Defaulters", String.valueOf(defaulterCount), "#e74c3c");
+            
+            // Average Attendance
+            double avgAttendance = getAverageAttendance(conn);
+            VBox attendanceCard = createStatCard("Average Attendance", String.format("%.1f%%", avgAttendance), "#1abc9c");
+            
+            // Recent Activity
+            VBox activityCard = createStatCard("Today's Attendance", getTodayAttendanceCount(conn), "#34495e");
+            
+            statsGrid.add(courseCard, 0, 0);
+            statsGrid.add(subjectCard, 1, 0);
+            statsGrid.add(classCard, 2, 0);
+            statsGrid.add(studentCard, 3, 0);
+            statsGrid.add(teacherCard, 0, 1);
+            statsGrid.add(defaulterCard, 1, 1);
+            statsGrid.add(attendanceCard, 2, 1);
+            statsGrid.add(activityCard, 3, 1);
+            
+        } catch (Exception ex) {
+            Label errorLabel = new Label("Error loading statistics: " + ex.getMessage());
+            errorLabel.setStyle("-fx-text-fill: red;");
+            content.getChildren().addAll(title, errorLabel);
+            mainLayout.setCenter(content);
+            return;
+        }
+        
+        // Recent Defaulters Table
+        Label defaultersTitle = new Label("Recent Defaulters (Below 75%)");
+        defaultersTitle.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-padding: 20 0 10 0;");
+        
+        TableView<Map<String, Object>> defaultersTable = new TableView<>();
+        defaultersTable.setPrefHeight(200);
+        
+        TableColumn<Map<String, Object>, String> studentCol = new TableColumn<>("Student");
+        studentCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("student").toString()));
+        studentCol.setPrefWidth(200);
+        
+        TableColumn<Map<String, Object>, String> classCol = new TableColumn<>("Class");
+        classCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("class").toString()));
+        classCol.setPrefWidth(150);
+        
+        TableColumn<Map<String, Object>, String> subjectCol = new TableColumn<>("Subject");
+        subjectCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("subject").toString()));
+        subjectCol.setPrefWidth(150);
+        
+        TableColumn<Map<String, Object>, String> percentCol = new TableColumn<>("Attendance %");
+        percentCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("percentage").toString()));
+        percentCol.setPrefWidth(120);
+        
+        defaultersTable.getColumns().addAll(studentCol, classCol, subjectCol, percentCol);
+        
+        loadDefaultersData(defaultersTable);
+        
+        content.getChildren().addAll(title, statsGrid, defaultersTitle, defaultersTable);
+        
+        ScrollPane scrollPane = new ScrollPane(content);
+        scrollPane.setFitToWidth(true);
+        mainLayout.setCenter(scrollPane);
+    }
+    
+    private VBox createStatCard(String title, String value, String color) {
+        VBox card = new VBox(10);
+        card.setAlignment(Pos.CENTER);
+        card.setPadding(new Insets(20));
+        card.setStyle("-fx-background-color: " + color + "; -fx-background-radius: 10; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 5, 0, 0, 2);");
+        card.setPrefWidth(150);
+        card.setPrefHeight(100);
+        
+        Label titleLabel = new Label(title);
+        titleLabel.setStyle("-fx-text-fill: white; -fx-font-size: 12px; -fx-font-weight: bold;");
+        titleLabel.setWrapText(true);
+        titleLabel.setAlignment(Pos.CENTER);
+        
+        Label valueLabel = new Label(value);
+        valueLabel.setStyle("-fx-text-fill: white; -fx-font-size: 24px; -fx-font-weight: bold;");
+        
+        card.getChildren().addAll(titleLabel, valueLabel);
+        return card;
+    }
+    
+    private String getCount(Connection conn, String query) throws SQLException {
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
+            if (rs.next()) {
+                return String.valueOf(rs.getInt(1));
+            }
+        }
+        return "0";
+    }
+    
+    private int getDefaulterCount(Connection conn) throws SQLException {
+        String query = "SELECT COUNT(DISTINCT u.id) FROM users u " +
+                      "JOIN class_students cs ON u.id = cs.student_id " +
+                      "JOIN attendance a ON u.id = a.student_id " +
+                      "WHERE u.role = 'STUDENT' " +
+                      "GROUP BY u.id, a.subject_id, a.class_id " +
+                      "HAVING (SUM(CASE WHEN a.status = 'PRESENT' THEN 1 ELSE 0 END) * 100.0 / COUNT(*)) < 75";
+        
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM (" + query + ") as defaulters")) {
+            if (rs.next()) {
+                return rs.getInt(1);
+            }
+        }
+        return 0;
+    }
+    
+    private double getAverageAttendance(Connection conn) throws SQLException {
+        String query = "SELECT AVG(attendance_percentage) FROM (" +
+                      "SELECT (SUM(CASE WHEN a.status = 'PRESENT' THEN 1 ELSE 0 END) * 100.0 / COUNT(*)) as attendance_percentage " +
+                      "FROM attendance a " +
+                      "GROUP BY a.student_id, a.subject_id, a.class_id" +
+                      ") as student_attendance";
+        
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
+            if (rs.next()) {
+                return rs.getDouble(1);
+            }
+        }
+        return 0.0;
+    }
+    
+    private String getTodayAttendanceCount(Connection conn) throws SQLException {
+        String query = "SELECT COUNT(*) FROM attendance WHERE DATE(marked_at) = CURDATE()";
+        
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
+            if (rs.next()) {
+                return String.valueOf(rs.getInt(1));
+            }
+        }
+        return "0";
+    }
+    
+    private void loadDefaultersData(TableView<Map<String, Object>> table) {
+        try (Connection conn = DatabaseConfig.getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                 "SELECT u.name as student, cl.name as class, s.name as subject, " +
+                 "(SUM(CASE WHEN a.status = 'PRESENT' THEN 1 ELSE 0 END) * 100.0 / COUNT(*)) as percentage " +
+                 "FROM users u " +
+                 "JOIN class_students cs ON u.id = cs.student_id " +
+                 "JOIN classes cl ON cs.class_id = cl.id " +
+                 "JOIN attendance a ON u.id = a.student_id AND a.class_id = cl.id " +
+                 "JOIN subjects s ON a.subject_id = s.id " +
+                 "WHERE u.role = 'STUDENT' " +
+                 "GROUP BY u.id, a.subject_id, a.class_id " +
+                 "HAVING percentage < 75 " +
+                 "ORDER BY percentage ASC " +
+                 "LIMIT 10")) {
+            
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) {
+                Map<String, Object> row = new HashMap<>();
+                row.put("student", rs.getString("student"));
+                row.put("class", rs.getString("class"));
+                row.put("subject", rs.getString("subject"));
+                row.put("percentage", String.format("%.1f%%", rs.getDouble("percentage")));
+                table.getItems().add(row);
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
     }
     
     private void showManageCourses() {

@@ -64,15 +64,17 @@ public class TeacherDashboard {
         
         Button[] menuButtons = {
             createMenuButton("Take Attendance"),
+            createMenuButton("Quick Actions"),
             createMenuButton("View Attendance"),
             createMenuButton("Modify Attendance"),
             createMenuButton("Check Defaulters")
         };
         
         menuButtons[0].setOnAction(e -> showTakeAttendance());
-        menuButtons[1].setOnAction(e -> showViewAttendance());
-        menuButtons[2].setOnAction(e -> showModifyAttendance());
-        menuButtons[3].setOnAction(e -> showCheckDefaulters());
+        menuButtons[1].setOnAction(e -> showQuickActions());
+        menuButtons[2].setOnAction(e -> showViewAttendance());
+        menuButtons[3].setOnAction(e -> showModifyAttendance());
+        menuButtons[4].setOnAction(e -> showCheckDefaulters());
         
         menu.getChildren().addAll(menuButtons);
         
@@ -95,6 +97,475 @@ public class TeacherDashboard {
         return btn;
     }
     
+    private void showQuickActions() {
+        VBox content = new VBox(20);
+        content.setPadding(new Insets(30));
+        
+        Label title = new Label("Quick Actions");
+        title.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
+        
+        // Quick action cards
+        GridPane actionsGrid = new GridPane();
+        actionsGrid.setHgap(20);
+        actionsGrid.setVgap(20);
+        
+        // Mark All Present Card
+        VBox markAllPresentCard = createQuickActionCard(
+            "Mark All Present", 
+            "Mark all students present for today's lecture",
+            "#27ae60",
+            e -> showMarkAllPresentDialog()
+        );
+        
+        // Mark All Absent Card
+        VBox markAllAbsentCard = createQuickActionCard(
+            "Mark All Absent", 
+            "Mark all students absent for today's lecture",
+            "#e74c3c",
+            e -> showMarkAllAbsentDialog()
+        );
+        
+        // Copy Previous Day Card
+        VBox copyPreviousCard = createQuickActionCard(
+            "Copy Previous Day", 
+            "Copy attendance from previous lecture",
+            "#3498db",
+            e -> showCopyPreviousDialog()
+        );
+        
+        // Bulk Update Card
+        VBox bulkUpdateCard = createQuickActionCard(
+            "Bulk Update", 
+            "Update multiple students at once",
+            "#9b59b6",
+            e -> showBulkUpdateDialog()
+        );
+        
+        actionsGrid.add(markAllPresentCard, 0, 0);
+        actionsGrid.add(markAllAbsentCard, 1, 0);
+        actionsGrid.add(copyPreviousCard, 0, 1);
+        actionsGrid.add(bulkUpdateCard, 1, 1);
+        
+        Label infoLabel = new Label("Quick actions help you manage attendance efficiently for entire classes.");
+        infoLabel.setStyle("-fx-font-size: 14px; -fx-text-fill: #7f8c8d; -fx-wrap-text: true;");
+        
+        content.getChildren().addAll(title, actionsGrid, infoLabel);
+        mainLayout.setCenter(content);
+    }
+    
+    private VBox createQuickActionCard(String title, String description, String color, javafx.event.EventHandler<javafx.event.ActionEvent> action) {
+        VBox card = new VBox(15);
+        card.setAlignment(Pos.CENTER);
+        card.setPadding(new Insets(25));
+        card.setStyle("-fx-background-color: white; -fx-border-color: " + color + "; -fx-border-width: 2; -fx-background-radius: 10; -fx-border-radius: 10; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 5, 0, 0, 2);");
+        card.setPrefWidth(250);
+        card.setPrefHeight(150);
+        card.setCursor(javafx.scene.Cursor.HAND);
+        
+        Label titleLabel = new Label(title);
+        titleLabel.setStyle("-fx-text-fill: " + color + "; -fx-font-size: 16px; -fx-font-weight: bold;");
+        titleLabel.setAlignment(Pos.CENTER);
+        
+        Label descLabel = new Label(description);
+        descLabel.setStyle("-fx-text-fill: #7f8c8d; -fx-font-size: 12px;");
+        descLabel.setWrapText(true);
+        descLabel.setAlignment(Pos.CENTER);
+        
+        Button actionBtn = new Button("Execute");
+        actionBtn.setStyle("-fx-background-color: " + color + "; -fx-text-fill: white; -fx-cursor: hand; -fx-padding: 8 16;");
+        actionBtn.setOnAction(action);
+        
+        card.getChildren().addAll(titleLabel, descLabel, actionBtn);
+        
+        // Hover effects
+        card.setOnMouseEntered(e -> card.setStyle("-fx-background-color: #f8f9fa; -fx-border-color: " + color + "; -fx-border-width: 2; -fx-background-radius: 10; -fx-border-radius: 10; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.2), 8, 0, 0, 3);"));
+        card.setOnMouseExited(e -> card.setStyle("-fx-background-color: white; -fx-border-color: " + color + "; -fx-border-width: 2; -fx-background-radius: 10; -fx-border-radius: 10; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 5, 0, 0, 2);"));
+        
+        return card;
+    }
+    
+    private void showMarkAllPresentDialog() {
+        Stage dialog = new Stage();
+        dialog.setTitle("Mark All Present");
+        
+        VBox form = new VBox(15);
+        form.setPadding(new Insets(20));
+        
+        Label titleLabel = new Label("Mark All Students Present");
+        titleLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+        
+        ComboBox<String> classSubjectCombo = new ComboBox<>();
+        classSubjectCombo.setPromptText("Select Class & Subject");
+        loadTeacherAssignments(classSubjectCombo);
+        
+        DatePicker datePicker = new DatePicker(java.time.LocalDate.now());
+        
+        Button executeBtn = new Button("Mark All Present");
+        executeBtn.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-cursor: hand;");
+        
+        Label msgLabel = new Label();
+        
+        executeBtn.setOnAction(e -> {
+            String selection = classSubjectCombo.getValue();
+            java.time.LocalDate date = datePicker.getValue();
+            
+            if (selection != null && date != null) {
+                Assignment assignment = assignmentMap.get(selection);
+                int classId = assignment.classId;
+                int subjectId = assignment.subjectId;
+                
+                try (Connection conn = DatabaseConfig.getConnection();
+                     PreparedStatement ps = conn.prepareStatement(
+                         "INSERT INTO attendance (student_id, subject_id, class_id, date, status, marked_by) " +
+                         "SELECT cs.student_id, ?, ?, ?, 'PRESENT', ? " +
+                         "FROM class_students cs " +
+                         "WHERE cs.class_id = ? " +
+                         "ON DUPLICATE KEY UPDATE status = 'PRESENT', marked_by = ?, marked_at = CURRENT_TIMESTAMP")) {
+                    
+                    ps.setInt(1, subjectId);
+                    ps.setInt(2, classId);
+                    ps.setDate(3, java.sql.Date.valueOf(date));
+                    ps.setInt(4, teacher.getId());
+                    ps.setInt(5, classId);
+                    ps.setInt(6, teacher.getId());
+                    
+                    int count = ps.executeUpdate();
+                    msgLabel.setText("Successfully marked " + count + " students as present!");
+                    msgLabel.setStyle("-fx-text-fill: green;");
+                    
+                } catch (Exception ex) {
+                    msgLabel.setText("Error: " + ex.getMessage());
+                    msgLabel.setStyle("-fx-text-fill: red;");
+                    ex.printStackTrace();
+                }
+            }
+        });
+        
+        Button cancelBtn = new Button("Cancel");
+        cancelBtn.setOnAction(e -> dialog.close());
+        
+        HBox buttons = new HBox(10, executeBtn, cancelBtn);
+        
+        form.getChildren().addAll(
+            titleLabel,
+            new Label("Class & Subject:"), classSubjectCombo,
+            new Label("Date:"), datePicker,
+            buttons,
+            msgLabel
+        );
+        
+        Scene scene = new Scene(form, 350, 300);
+        dialog.setScene(scene);
+        dialog.show();
+    }
+    
+    private void showMarkAllAbsentDialog() {
+        Stage dialog = new Stage();
+        dialog.setTitle("Mark All Absent");
+        
+        VBox form = new VBox(15);
+        form.setPadding(new Insets(20));
+        
+        Label titleLabel = new Label("Mark All Students Absent");
+        titleLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+        
+        ComboBox<String> classSubjectCombo = new ComboBox<>();
+        classSubjectCombo.setPromptText("Select Class & Subject");
+        loadTeacherAssignments(classSubjectCombo);
+        
+        DatePicker datePicker = new DatePicker(java.time.LocalDate.now());
+        
+        Button executeBtn = new Button("Mark All Absent");
+        executeBtn.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white; -fx-cursor: hand;");
+        
+        Label msgLabel = new Label();
+        
+        executeBtn.setOnAction(e -> {
+            String selection = classSubjectCombo.getValue();
+            java.time.LocalDate date = datePicker.getValue();
+            
+            if (selection != null && date != null) {
+                Assignment assignment = assignmentMap.get(selection);
+                int classId = assignment.classId;
+                int subjectId = assignment.subjectId;
+                
+                try (Connection conn = DatabaseConfig.getConnection();
+                     PreparedStatement ps = conn.prepareStatement(
+                         "INSERT INTO attendance (student_id, subject_id, class_id, date, status, marked_by) " +
+                         "SELECT cs.student_id, ?, ?, ?, 'ABSENT', ? " +
+                         "FROM class_students cs " +
+                         "WHERE cs.class_id = ? " +
+                         "ON DUPLICATE KEY UPDATE status = 'ABSENT', marked_by = ?, marked_at = CURRENT_TIMESTAMP")) {
+                    
+                    ps.setInt(1, subjectId);
+                    ps.setInt(2, classId);
+                    ps.setDate(3, java.sql.Date.valueOf(date));
+                    ps.setInt(4, teacher.getId());
+                    ps.setInt(5, classId);
+                    ps.setInt(6, teacher.getId());
+                    
+                    int count = ps.executeUpdate();
+                    msgLabel.setText("Successfully marked " + count + " students as absent!");
+                    msgLabel.setStyle("-fx-text-fill: green;");
+                    
+                } catch (Exception ex) {
+                    msgLabel.setText("Error: " + ex.getMessage());
+                    msgLabel.setStyle("-fx-text-fill: red;");
+                    ex.printStackTrace();
+                }
+            }
+        });
+        
+        Button cancelBtn = new Button("Cancel");
+        cancelBtn.setOnAction(e -> dialog.close());
+        
+        HBox buttons = new HBox(10, executeBtn, cancelBtn);
+        
+        form.getChildren().addAll(
+            titleLabel,
+            new Label("Class & Subject:"), classSubjectCombo,
+            new Label("Date:"), datePicker,
+            buttons,
+            msgLabel
+        );
+        
+        Scene scene = new Scene(form, 350, 300);
+        dialog.setScene(scene);
+        dialog.show();
+    }
+    
+    private void showCopyPreviousDialog() {
+        Stage dialog = new Stage();
+        dialog.setTitle("Copy Previous Day Attendance");
+        
+        VBox form = new VBox(15);
+        form.setPadding(new Insets(20));
+        
+        Label titleLabel = new Label("Copy Previous Day Attendance");
+        titleLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+        
+        ComboBox<String> classSubjectCombo = new ComboBox<>();
+        classSubjectCombo.setPromptText("Select Class & Subject");
+        loadTeacherAssignments(classSubjectCombo);
+        
+        DatePicker fromDatePicker = new DatePicker();
+        DatePicker toDatePicker = new DatePicker(java.time.LocalDate.now());
+        
+        Button executeBtn = new Button("Copy Attendance");
+        executeBtn.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-cursor: hand;");
+        
+        Label msgLabel = new Label();
+        
+        executeBtn.setOnAction(e -> {
+            String selection = classSubjectCombo.getValue();
+            java.time.LocalDate fromDate = fromDatePicker.getValue();
+            java.time.LocalDate toDate = toDatePicker.getValue();
+            
+            if (selection != null && fromDate != null && toDate != null) {
+                Assignment assignment = assignmentMap.get(selection);
+                int classId = assignment.classId;
+                int subjectId = assignment.subjectId;
+                
+                try (Connection conn = DatabaseConfig.getConnection();
+                     PreparedStatement ps = conn.prepareStatement(
+                         "INSERT INTO attendance (student_id, subject_id, class_id, date, status, marked_by) " +
+                         "SELECT student_id, subject_id, class_id, ?, status, ? " +
+                         "FROM attendance " +
+                         "WHERE class_id = ? AND subject_id = ? AND date = ? " +
+                         "ON DUPLICATE KEY UPDATE status = VALUES(status), marked_by = VALUES(marked_by), marked_at = CURRENT_TIMESTAMP")) {
+                    
+                    ps.setDate(1, java.sql.Date.valueOf(toDate));
+                    ps.setInt(2, teacher.getId());
+                    ps.setInt(3, classId);
+                    ps.setInt(4, subjectId);
+                    ps.setDate(5, java.sql.Date.valueOf(fromDate));
+                    
+                    int count = ps.executeUpdate();
+                    msgLabel.setText("Successfully copied attendance for " + count + " students!");
+                    msgLabel.setStyle("-fx-text-fill: green;");
+                    
+                } catch (Exception ex) {
+                    msgLabel.setText("Error: " + ex.getMessage());
+                    msgLabel.setStyle("-fx-text-fill: red;");
+                    ex.printStackTrace();
+                }
+            }
+        });
+        
+        Button cancelBtn = new Button("Cancel");
+        cancelBtn.setOnAction(e -> dialog.close());
+        
+        HBox buttons = new HBox(10, executeBtn, cancelBtn);
+        
+        form.getChildren().addAll(
+            titleLabel,
+            new Label("Class & Subject:"), classSubjectCombo,
+            new Label("Copy From Date:"), fromDatePicker,
+            new Label("Copy To Date:"), toDatePicker,
+            buttons,
+            msgLabel
+        );
+        
+        Scene scene = new Scene(form, 350, 350);
+        dialog.setScene(scene);
+        dialog.show();
+    }
+    
+    private void showBulkUpdateDialog() {
+        Stage dialog = new Stage();
+        dialog.setTitle("Bulk Update Attendance");
+        dialog.setWidth(600);
+        dialog.setHeight(500);
+        
+        VBox form = new VBox(15);
+        form.setPadding(new Insets(20));
+        
+        Label titleLabel = new Label("Bulk Update Attendance");
+        titleLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+        
+        ComboBox<String> classSubjectCombo = new ComboBox<>();
+        classSubjectCombo.setPromptText("Select Class & Subject");
+        loadTeacherAssignments(classSubjectCombo);
+        
+        DatePicker datePicker = new DatePicker(java.time.LocalDate.now());
+        
+        TableView<Map<String, Object>> studentsTable = new TableView<>();
+        studentsTable.setPrefHeight(250);
+        
+        TableColumn<Map<String, Object>, String> nameCol = new TableColumn<>("Student Name");
+        nameCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("name").toString()));
+        nameCol.setPrefWidth(200);
+        
+        TableColumn<Map<String, Object>, String> statusCol = new TableColumn<>("Status");
+        statusCol.setCellFactory(col -> new TableCell<Map<String, Object>, String>() {
+            private final ComboBox<String> statusCombo = new ComboBox<>();
+            {
+                statusCombo.getItems().addAll("PRESENT", "ABSENT");
+                statusCombo.setOnAction(e -> {
+                    Map<String, Object> row = getTableView().getItems().get(getIndex());
+                    row.put("status", statusCombo.getValue());
+                });
+            }
+            
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty) {
+                    setGraphic(null);
+                } else {
+                    Map<String, Object> row = getTableView().getItems().get(getIndex());
+                    statusCombo.setValue(row.get("status").toString());
+                    setGraphic(statusCombo);
+                }
+            }
+        });
+        statusCol.setPrefWidth(150);
+        
+        studentsTable.getColumns().addAll(nameCol, statusCol);
+        
+        classSubjectCombo.setOnAction(e -> {
+            String selection = classSubjectCombo.getValue();
+            java.time.LocalDate date = datePicker.getValue();
+            
+            if (selection != null && date != null) {
+                studentsTable.getItems().clear();
+                Assignment assignment = assignmentMap.get(selection);
+                int classId = assignment.classId;
+                int subjectId = assignment.subjectId;
+                
+                try (Connection conn = DatabaseConfig.getConnection();
+                     PreparedStatement ps = conn.prepareStatement(
+                         "SELECT u.id, u.name, COALESCE(a.status, 'PRESENT') as status " +
+                         "FROM class_students cs " +
+                         "JOIN users u ON cs.student_id = u.id " +
+                         "LEFT JOIN attendance a ON u.id = a.student_id AND a.class_id = ? AND a.subject_id = ? AND a.date = ? " +
+                         "WHERE cs.class_id = ? ORDER BY u.name")) {
+                    
+                    ps.setInt(1, classId);
+                    ps.setInt(2, subjectId);
+                    ps.setDate(3, java.sql.Date.valueOf(date));
+                    ps.setInt(4, classId);
+                    
+                    ResultSet rs = ps.executeQuery();
+                    while (rs.next()) {
+                        Map<String, Object> row = new HashMap<>();
+                        row.put("id", rs.getInt("id"));
+                        row.put("name", rs.getString("name"));
+                        row.put("status", rs.getString("status"));
+                        studentsTable.getItems().add(row);
+                    }
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            }
+        });
+        
+        Button saveBtn = new Button("Save All Changes");
+        saveBtn.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-cursor: hand;");
+        
+        Label msgLabel = new Label();
+        
+        saveBtn.setOnAction(e -> {
+            String selection = classSubjectCombo.getValue();
+            java.time.LocalDate date = datePicker.getValue();
+            
+            if (selection != null && date != null && !studentsTable.getItems().isEmpty()) {
+                Assignment assignment = assignmentMap.get(selection);
+                int classId = assignment.classId;
+                int subjectId = assignment.subjectId;
+                
+                try (Connection conn = DatabaseConfig.getConnection();
+                     PreparedStatement ps = conn.prepareStatement(
+                         "INSERT INTO attendance (student_id, subject_id, class_id, date, status, marked_by) " +
+                         "VALUES (?, ?, ?, ?, ?, ?) " +
+                         "ON DUPLICATE KEY UPDATE status = ?, marked_by = ?, marked_at = CURRENT_TIMESTAMP")) {
+                    
+                    for (Map<String, Object> row : studentsTable.getItems()) {
+                        int studentId = (int) row.get("id");
+                        String status = row.get("status").toString();
+                        
+                        ps.setInt(1, studentId);
+                        ps.setInt(2, subjectId);
+                        ps.setInt(3, classId);
+                        ps.setDate(4, java.sql.Date.valueOf(date));
+                        ps.setString(5, status);
+                        ps.setInt(6, teacher.getId());
+                        ps.setString(7, status);
+                        ps.setInt(8, teacher.getId());
+                        ps.addBatch();
+                    }
+                    
+                    ps.executeBatch();
+                    msgLabel.setText("Successfully updated attendance for " + studentsTable.getItems().size() + " students!");
+                    msgLabel.setStyle("-fx-text-fill: green;");
+                    
+                } catch (Exception ex) {
+                    msgLabel.setText("Error: " + ex.getMessage());
+                    msgLabel.setStyle("-fx-text-fill: red;");
+                    ex.printStackTrace();
+                }
+            }
+        });
+        
+        Button cancelBtn = new Button("Cancel");
+        cancelBtn.setOnAction(e -> dialog.close());
+        
+        HBox buttons = new HBox(10, saveBtn, cancelBtn);
+        
+        form.getChildren().addAll(
+            titleLabel,
+            new Label("Class & Subject:"), classSubjectCombo,
+            new Label("Date:"), datePicker,
+            new Label("Students:"), studentsTable,
+            buttons,
+            msgLabel
+        );
+        
+        Scene scene = new Scene(form);
+        dialog.setScene(scene);
+        dialog.show();
+    }
+
     private void showTakeAttendance() {
         VBox content = new VBox(20);
         content.setPadding(new Insets(30));

@@ -2,11 +2,18 @@ package javaproject;
 
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.print.PrinterJob;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
+import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
+import javafx.scene.text.Text;
+import javafx.scene.text.TextFlow;
 import javafx.stage.Stage;
 import java.sql.*;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 public class StudentDashboard {
@@ -49,12 +56,14 @@ public class StudentDashboard {
         Button[] menuButtons = {
             createMenuButton("My Attendance"),
             createMenuButton("Lecture Count"),
-            createMenuButton("Defaulter Status")
+            createMenuButton("Defaulter Status"),
+            createMenuButton("Export PDF")
         };
         
         menuButtons[0].setOnAction(e -> showMyAttendance());
         menuButtons[1].setOnAction(e -> showLectureCount());
         menuButtons[2].setOnAction(e -> showDefaulterStatus());
+        menuButtons[3].setOnAction(e -> showExportPDF());
         
         menu.getChildren().addAll(menuButtons);
         
@@ -323,5 +332,313 @@ public class StudentDashboard {
     
     private void logout() {
         new LoginScreen(stage).show();
+    }
+    
+    private void showExportPDF() {
+        VBox content = new VBox(20);
+        content.setPadding(new Insets(30));
+        
+        Label title = new Label("Export Attendance as PDF");
+        title.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
+        
+        // Export options
+        VBox exportOptions = new VBox(15);
+        exportOptions.setPadding(new Insets(20));
+        exportOptions.setStyle("-fx-background-color: #f8f9fa; -fx-border-color: #dee2e6; -fx-border-radius: 5; -fx-background-radius: 5;");
+        
+        Label optionsTitle = new Label("Export Options");
+        optionsTitle.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+        
+        ComboBox<String> subjectCombo = new ComboBox<>();
+        subjectCombo.setPromptText("Select Subject (All Subjects)");
+        loadStudentSubjects(subjectCombo);
+        
+        DatePicker fromDate = new DatePicker();
+        fromDate.setPromptText("From Date (Optional)");
+        
+        DatePicker toDate = new DatePicker();
+        toDate.setPromptText("To Date (Optional)");
+        
+        CheckBox includeStats = new CheckBox("Include Statistics Summary");
+        includeStats.setSelected(true);
+        
+        Button exportBtn = new Button("Generate & Print PDF");
+        exportBtn.setStyle("-fx-background-color: #007bff; -fx-text-fill: white; -fx-font-size: 14px; -fx-cursor: hand; -fx-padding: 10 20;");
+        
+        Label msgLabel = new Label();
+        
+        exportBtn.setOnAction(e -> {
+            generateAndPrintPDF(
+                subjectCombo.getValue(),
+                fromDate.getValue(),
+                toDate.getValue(),
+                includeStats.isSelected(),
+                msgLabel
+            );
+        });
+        
+        exportOptions.getChildren().addAll(
+            optionsTitle,
+            new Label("Subject:"), subjectCombo,
+            new Label("From Date:"), fromDate,
+            new Label("To Date:"), toDate,
+            includeStats,
+            exportBtn,
+            msgLabel
+        );
+        
+        // Preview area
+        Label previewTitle = new Label("Preview");
+        previewTitle.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+        
+        TextArea previewArea = new TextArea();
+        previewArea.setPrefHeight(300);
+        previewArea.setEditable(false);
+        previewArea.setStyle("-fx-font-family: 'Courier New'; -fx-font-size: 12px;");
+        
+        Button previewBtn = new Button("Generate Preview");
+        previewBtn.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-cursor: hand;");
+        
+        previewBtn.setOnAction(e -> {
+            String preview = generateAttendanceReport(
+                subjectCombo.getValue(),
+                fromDate.getValue(),
+                toDate.getValue(),
+                includeStats.isSelected()
+            );
+            previewArea.setText(preview);
+        });
+        
+        content.getChildren().addAll(
+            title,
+            exportOptions,
+            previewTitle,
+            previewBtn,
+            previewArea
+        );
+        
+        ScrollPane scrollPane = new ScrollPane(content);
+        scrollPane.setFitToWidth(true);
+        mainLayout.setCenter(scrollPane);
+    }
+    
+    private void loadStudentSubjects(ComboBox<String> combo) {
+        combo.getItems().add("All Subjects");
+        
+        try (Connection conn = DatabaseConfig.getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                 "SELECT DISTINCT s.id, s.name FROM subjects s " +
+                 "JOIN attendance a ON s.id = a.subject_id " +
+                 "WHERE a.student_id = ? ORDER BY s.name")) {
+            
+            ps.setInt(1, student.getId());
+            ResultSet rs = ps.executeQuery();
+            
+            while (rs.next()) {
+                combo.getItems().add(rs.getInt("id") + " - " + rs.getString("name"));
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+    }
+    
+    private String generateAttendanceReport(String subject, LocalDate fromDate, LocalDate toDate, boolean includeStats) {
+        StringBuilder report = new StringBuilder();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+        
+        // Header
+        report.append("ATTENDANCE REPORT\n");
+        report.append("=".repeat(50)).append("\n\n");
+        report.append("Student: ").append(student.getName()).append("\n");
+        report.append("Student ID: ").append(student.getId()).append("\n");
+        report.append("Generated: ").append(LocalDate.now().format(formatter)).append("\n");
+        
+        if (fromDate != null) {
+            report.append("From Date: ").append(fromDate.format(formatter)).append("\n");
+        }
+        if (toDate != null) {
+            report.append("To Date: ").append(toDate.format(formatter)).append("\n");
+        }
+        
+        report.append("\n").append("-".repeat(50)).append("\n\n");
+        
+        try (Connection conn = DatabaseConfig.getConnection()) {
+            String query = buildAttendanceQuery(subject, fromDate, toDate);
+            
+            try (PreparedStatement ps = conn.prepareStatement(query)) {
+                setQueryParameters(ps, subject, fromDate, toDate);
+                ResultSet rs = ps.executeQuery();
+                
+                String currentSubject = "";
+                int totalPresent = 0, totalLectures = 0;
+                Map<String, int[]> subjectStats = new HashMap<>();
+                
+                while (rs.next()) {
+                    String subjectName = rs.getString("subject_name");
+                    String date = rs.getDate("date").toLocalDate().format(formatter);
+                    String status = rs.getString("status");
+                    
+                    if (!currentSubject.equals(subjectName)) {
+                        if (!currentSubject.isEmpty()) {
+                            report.append("\n");
+                        }
+                        currentSubject = subjectName;
+                        report.append("Subject: ").append(subjectName).append("\n");
+                        report.append("-".repeat(30)).append("\n");
+                    }
+                    
+                    report.append(String.format("%-12s : %s\n", date, status));
+                    
+                    // Update statistics
+                    subjectStats.putIfAbsent(subjectName, new int[2]);
+                    int[] stats = subjectStats.get(subjectName);
+                    stats[1]++; // Total lectures
+                    if ("PRESENT".equals(status)) {
+                        stats[0]++; // Present count
+                        totalPresent++;
+                    }
+                    totalLectures++;
+                }
+                
+                // Add statistics if requested
+                if (includeStats && !subjectStats.isEmpty()) {
+                    report.append("\n").append("=".repeat(50)).append("\n");
+                    report.append("ATTENDANCE STATISTICS\n");
+                    report.append("=".repeat(50)).append("\n\n");
+                    
+                    for (Map.Entry<String, int[]> entry : subjectStats.entrySet()) {
+                        String subjectName = entry.getKey();
+                        int[] stats = entry.getValue();
+                        double percentage = (stats[0] * 100.0) / stats[1];
+                        
+                        report.append(String.format("%-20s: %d/%d (%.1f%%)\n", 
+                            subjectName, stats[0], stats[1], percentage));
+                    }
+                    
+                    double overallPercentage = totalLectures > 0 ? (totalPresent * 100.0) / totalLectures : 0;
+                    report.append("\n");
+                    report.append(String.format("Overall Attendance: %d/%d (%.1f%%)\n", 
+                        totalPresent, totalLectures, overallPercentage));
+                    
+                    if (overallPercentage < 75) {
+                        report.append("\n*** WARNING: Attendance below 75% threshold ***\n");
+                    }
+                }
+                
+            }
+        } catch (Exception ex) {
+            report.append("Error generating report: ").append(ex.getMessage());
+            ex.printStackTrace();
+        }
+        
+        return report.toString();
+    }
+    
+    private String buildAttendanceQuery(String subject, LocalDate fromDate, LocalDate toDate) {
+        StringBuilder query = new StringBuilder(
+            "SELECT s.name as subject_name, a.date, a.status " +
+            "FROM attendance a " +
+            "JOIN subjects s ON a.subject_id = s.id " +
+            "WHERE a.student_id = ?"
+        );
+        
+        if (subject != null && !subject.equals("All Subjects")) {
+            query.append(" AND s.id = ?");
+        }
+        
+        if (fromDate != null) {
+            query.append(" AND a.date >= ?");
+        }
+        
+        if (toDate != null) {
+            query.append(" AND a.date <= ?");
+        }
+        
+        query.append(" ORDER BY s.name, a.date");
+        
+        return query.toString();
+    }
+    
+    private void setQueryParameters(PreparedStatement ps, String subject, LocalDate fromDate, LocalDate toDate) throws SQLException {
+        int paramIndex = 1;
+        
+        ps.setInt(paramIndex++, student.getId());
+        
+        if (subject != null && !subject.equals("All Subjects")) {
+            int subjectId = Integer.parseInt(subject.split(" - ")[0]);
+            ps.setInt(paramIndex++, subjectId);
+        }
+        
+        if (fromDate != null) {
+            ps.setDate(paramIndex++, java.sql.Date.valueOf(fromDate));
+        }
+        
+        if (toDate != null) {
+            ps.setDate(paramIndex++, java.sql.Date.valueOf(toDate));
+        }
+    }
+    
+    private void generateAndPrintPDF(String subject, LocalDate fromDate, LocalDate toDate, boolean includeStats, Label msgLabel) {
+        try {
+            // Generate the report content
+            String reportContent = generateAttendanceReport(subject, fromDate, toDate, includeStats);
+            
+            // Create a TextFlow for printing
+            TextFlow textFlow = new TextFlow();
+            textFlow.setPrefWidth(550); // A4 width minus margins
+            textFlow.setPadding(new Insets(20));
+            
+            // Split content into lines and create Text nodes
+            String[] lines = reportContent.split("\n");
+            for (String line : lines) {
+                Text text = new Text(line + "\n");
+                
+                // Style different types of content
+                if (line.startsWith("ATTENDANCE REPORT") || line.startsWith("ATTENDANCE STATISTICS")) {
+                    text.setFont(Font.font("Arial", FontWeight.BOLD, 16));
+                } else if (line.startsWith("Subject:") || line.startsWith("Student:")) {
+                    text.setFont(Font.font("Arial", FontWeight.BOLD, 12));
+                } else if (line.startsWith("=") || line.startsWith("-")) {
+                    text.setFont(Font.font("Courier New", 10));
+                } else {
+                    text.setFont(Font.font("Arial", 11));
+                }
+                
+                textFlow.getChildren().add(text);
+            }
+            
+            // Create and configure printer job
+            PrinterJob printerJob = PrinterJob.createPrinterJob();
+            
+            if (printerJob != null) {
+                // Show print dialog
+                boolean proceed = printerJob.showPrintDialog(stage);
+                
+                if (proceed) {
+                    // Print the content
+                    boolean success = printerJob.printPage(textFlow);
+                    
+                    if (success) {
+                        printerJob.endJob();
+                        msgLabel.setText("Attendance report sent to printer successfully!");
+                        msgLabel.setStyle("-fx-text-fill: green; -fx-font-weight: bold;");
+                    } else {
+                        msgLabel.setText("Failed to print the report.");
+                        msgLabel.setStyle("-fx-text-fill: red; -fx-font-weight: bold;");
+                    }
+                } else {
+                    msgLabel.setText("Print job cancelled by user.");
+                    msgLabel.setStyle("-fx-text-fill: orange; -fx-font-weight: bold;");
+                }
+            } else {
+                msgLabel.setText("No printer available. Please check your printer setup.");
+                msgLabel.setStyle("-fx-text-fill: red; -fx-font-weight: bold;");
+            }
+            
+        } catch (Exception ex) {
+            msgLabel.setText("Error generating PDF: " + ex.getMessage());
+            msgLabel.setStyle("-fx-text-fill: red; -fx-font-weight: bold;");
+            ex.printStackTrace();
+        }
     }
 }
