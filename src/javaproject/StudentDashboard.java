@@ -55,6 +55,7 @@ public class StudentDashboard {
         
         Button[] menuButtons = {
             createMenuButton("My Attendance"),
+            createMenuButton("Attendance Analysis"),
             createMenuButton("Lecture Count"),
             createMenuButton("Defaulter Status"),
             createMenuButton("Leave Request"),
@@ -62,10 +63,11 @@ public class StudentDashboard {
         };
         
         menuButtons[0].setOnAction(e -> showMyAttendance());
-        menuButtons[1].setOnAction(e -> showLectureCount());
-        menuButtons[2].setOnAction(e -> showDefaulterStatus());
-        menuButtons[3].setOnAction(e -> showLeaveRequest());
-        menuButtons[4].setOnAction(e -> showExportPDF());
+        menuButtons[1].setOnAction(e -> showAttendanceAnalysis());
+        menuButtons[2].setOnAction(e -> showLectureCount());
+        menuButtons[3].setOnAction(e -> showDefaulterStatus());
+        menuButtons[4].setOnAction(e -> showLeaveRequest());
+        menuButtons[5].setOnAction(e -> showExportPDF());
         
         menu.getChildren().addAll(menuButtons);
         
@@ -1004,5 +1006,264 @@ public class StudentDashboard {
             msgLabel.setStyle("-fx-text-fill: red; -fx-font-weight: bold;");
             ex.printStackTrace();
         }
+    }
+    
+    private void showAttendanceAnalysis() {
+        VBox content = new VBox(20);
+        content.setPadding(new Insets(30));
+        
+        Label title = new Label("Attendance Analysis - 75% Requirement");
+        title.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
+        
+        // Info box explaining the analysis
+        VBox infoBox = new VBox(10);
+        infoBox.setStyle("-fx-background-color: #e8f4fd; -fx-border-color: #3498db; -fx-border-width: 1; -fx-border-radius: 5; -fx-padding: 15;");
+        
+        Label infoTitle = new Label("📊 Attendance Analysis");
+        infoTitle.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #2c3e50;");
+        
+        Label infoText = new Label(
+            "This analysis shows:\n" +
+            "• If attendance ≥ 75%: How many lectures you can miss while staying above 75%\n" +
+            "• If attendance < 75%: How many lectures you need to attend to reach 75%"
+        );
+        infoText.setStyle("-fx-text-fill: #34495e; -fx-font-size: 14px;");
+        infoText.setWrapText(true);
+        
+        infoBox.getChildren().addAll(infoTitle, infoText);
+        
+        TableView<Map<String, Object>> table = new TableView<>();
+        table.setStyle("-fx-font-size: 14px;");
+        
+        // Table columns
+        TableColumn<Map<String, Object>, String> subjectCol = new TableColumn<>("Subject");
+        subjectCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("subject").toString()));
+        subjectCol.setPrefWidth(200);
+        
+        TableColumn<Map<String, Object>, String> attendedCol = new TableColumn<>("Attended");
+        attendedCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("attended").toString()));
+        attendedCol.setPrefWidth(80);
+        
+        TableColumn<Map<String, Object>, String> totalCol = new TableColumn<>("Total");
+        totalCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("total").toString()));
+        totalCol.setPrefWidth(80);
+        
+        TableColumn<Map<String, Object>, String> percentageCol = new TableColumn<>("Attendance %");
+        percentageCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("percentage").toString()));
+        percentageCol.setPrefWidth(100);
+        
+        TableColumn<Map<String, Object>, String> statusCol = new TableColumn<>("Status");
+        statusCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("status").toString()));
+        statusCol.setPrefWidth(100);
+        
+        TableColumn<Map<String, Object>, String> analysisCol = new TableColumn<>("Analysis");
+        analysisCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("analysis").toString()));
+        analysisCol.setPrefWidth(300);
+        analysisCol.setStyle("-fx-alignment: CENTER-LEFT;");
+        
+        // Custom cell factory for status column to add colors
+        statusCol.setCellFactory(column -> new TableCell<Map<String, Object>, String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    setText(item);
+                    if (item.contains("Safe")) {
+                        setStyle("-fx-text-fill: #27ae60; -fx-font-weight: bold;");
+                    } else if (item.contains("At Risk")) {
+                        setStyle("-fx-text-fill: #f39c12; -fx-font-weight: bold;");
+                    } else if (item.contains("Below")) {
+                        setStyle("-fx-text-fill: #e74c3c; -fx-font-weight: bold;");
+                    }
+                }
+            }
+        });
+        
+        // Custom cell factory for analysis column to add colors
+        analysisCol.setCellFactory(column -> new TableCell<Map<String, Object>, String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    setText(item);
+                    if (item.contains("can miss")) {
+                        setStyle("-fx-text-fill: #27ae60;");
+                    } else if (item.contains("need to attend")) {
+                        setStyle("-fx-text-fill: #e74c3c;");
+                    } else if (item.contains("Cannot miss")) {
+                        setStyle("-fx-text-fill: #f39c12;");
+                    }
+                }
+            }
+        });
+        
+        table.getColumns().addAll(subjectCol, attendedCol, totalCol, percentageCol, statusCol, analysisCol);
+        
+        // Load attendance analysis data
+        loadAttendanceAnalysis(table);
+        
+        // Refresh button
+        Button refreshBtn = new Button("🔄 Refresh Analysis");
+        refreshBtn.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-font-size: 14px; -fx-cursor: hand; -fx-padding: 10 20;");
+        refreshBtn.setOnAction(e -> loadAttendanceAnalysis(table));
+        
+        content.getChildren().addAll(title, infoBox, refreshBtn, table);
+        
+        ScrollPane scrollPane = new ScrollPane(content);
+        scrollPane.setFitToWidth(true);
+        mainLayout.setCenter(scrollPane);
+    }
+    
+    private void loadAttendanceAnalysis(TableView<Map<String, Object>> table) {
+        table.getItems().clear();
+        
+        try (Connection conn = DatabaseConfig.getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                 "SELECT s.id, s.name, s.conducted_lectures, " +
+                 "COUNT(CASE WHEN a.status = 'PRESENT' THEN 1 END) as attended, " +
+                 "COUNT(a.id) as total_marked " +
+                 "FROM subjects s " +
+                 "JOIN classes cl ON s.course_id = cl.course_id " +
+                 "JOIN class_students cs ON cl.id = cs.class_id " +
+                 "LEFT JOIN attendance a ON s.id = a.subject_id AND cs.student_id = a.student_id AND cl.id = a.class_id " +
+                 "WHERE cs.student_id = ? " +
+                 "GROUP BY s.id, s.name, s.conducted_lectures " +
+                 "ORDER BY s.name")) {
+            
+            ps.setInt(1, student.getId());
+            ResultSet rs = ps.executeQuery();
+            
+            while (rs.next()) {
+                Map<String, Object> row = new HashMap<>();
+                
+                String subjectName = rs.getString("name");
+                int attended = rs.getInt("attended");
+                int totalMarked = rs.getInt("total_marked");
+                int conductedLectures = rs.getInt("conducted_lectures");
+                
+                // Use the maximum of total_marked and conducted_lectures as the actual total
+                int actualTotal = Math.max(totalMarked, conductedLectures);
+                
+                double percentage = actualTotal > 0 ? (attended * 100.0 / actualTotal) : 0.0;
+                
+                row.put("subject", subjectName);
+                row.put("attended", String.valueOf(attended));
+                row.put("total", String.valueOf(actualTotal));
+                row.put("percentage", String.format("%.1f%%", percentage));
+                
+                // Calculate analysis
+                String status;
+                String analysis;
+                
+                if (percentage >= 75.0) {
+                    // Calculate how many lectures can be missed
+                    int canMiss = calculateLecturesCanMiss(attended, actualTotal);
+                    if (canMiss > 0) {
+                        status = "✅ Safe";
+                        analysis = String.format("Can miss %d more lecture(s)", canMiss);
+                    } else {
+                        status = "⚠️ At Risk";
+                        analysis = "Cannot miss any more lectures";
+                    }
+                } else {
+                    // Calculate how many lectures need to attend
+                    int needToAttend = calculateLecturesNeedToAttend(attended, actualTotal);
+                    status = "❌ Below 75%";
+                    if (needToAttend > 0) {
+                        analysis = String.format("Need to attend %d more lecture(s) to reach 75%%", needToAttend);
+                    } else {
+                        analysis = "Attend all remaining lectures to improve";
+                    }
+                }
+                
+                row.put("status", status);
+                row.put("analysis", analysis);
+                
+                table.getItems().add(row);
+            }
+            
+            if (table.getItems().isEmpty()) {
+                Map<String, Object> emptyRow = new HashMap<>();
+                emptyRow.put("subject", "No subjects found");
+                emptyRow.put("attended", "-");
+                emptyRow.put("total", "-");
+                emptyRow.put("percentage", "-");
+                emptyRow.put("status", "-");
+                emptyRow.put("analysis", "Please contact admin to enroll in subjects");
+                table.getItems().add(emptyRow);
+            }
+            
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            Map<String, Object> errorRow = new HashMap<>();
+            errorRow.put("subject", "Error loading data");
+            errorRow.put("attended", "-");
+            errorRow.put("total", "-");
+            errorRow.put("percentage", "-");
+            errorRow.put("status", "❌ Error");
+            errorRow.put("analysis", "Error: " + ex.getMessage());
+            table.getItems().add(errorRow);
+        }
+    }
+    
+    private int calculateLecturesCanMiss(int attended, int total) {
+        // Formula: Find maximum lectures that can be missed while keeping attendance >= 75%
+        // (attended) / (total + future_lectures - missed_lectures) >= 0.75
+        // We need to find the maximum missed_lectures
+        
+        int canMiss = 0;
+        int futureTotal = total;
+        
+        // Simulate missing lectures one by one
+        while (true) {
+            double newPercentage = (attended * 100.0) / (futureTotal + 1);
+            if (newPercentage >= 75.0) {
+                canMiss++;
+                futureTotal++;
+            } else {
+                break;
+            }
+            
+            // Safety check to prevent infinite loop
+            if (canMiss > 50) break;
+        }
+        
+        return canMiss;
+    }
+    
+    private int calculateLecturesNeedToAttend(int attended, int total) {
+        // Formula: Find minimum lectures to attend to reach 75%
+        // (attended + need_to_attend) / (total + future_lectures) >= 0.75
+        
+        int needToAttend = 0;
+        int currentAttended = attended;
+        int currentTotal = total;
+        
+        // Simulate attending future lectures
+        while (true) {
+            double currentPercentage = (currentAttended * 100.0) / currentTotal;
+            if (currentPercentage >= 75.0) {
+                break;
+            }
+            
+            // Add one more lecture (attend it)
+            currentAttended++;
+            currentTotal++;
+            needToAttend++;
+            
+            // Safety check to prevent infinite loop
+            if (needToAttend > 100) {
+                needToAttend = -1; // Indicate it's not achievable
+                break;
+            }
+        }
+        
+        return needToAttend;
     }
 }
