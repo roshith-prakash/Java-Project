@@ -1,8 +1,11 @@
 package javaproject;
 
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
+import javafx.scene.chart.PieChart;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
@@ -47,7 +50,7 @@ public class AdminDashboard {
         menu.setPrefWidth(200);
         
         Button[] menuButtons = {
-            createMenuButton("Dashboard Statistics"),
+            createMenuButton("Dashboard"), // New Button
             createMenuButton("Manage Courses"),
             createMenuButton("Manage Subjects"),
             createMenuButton("Manage Classes"),
@@ -56,7 +59,8 @@ public class AdminDashboard {
             createMenuButton("Defaulter List")
         };
         
-        menuButtons[0].setOnAction(e -> showDashboardStatistics());
+        // Updated actions
+        menuButtons[0].setOnAction(e -> showDashboardHome());
         menuButtons[1].setOnAction(e -> showManageCourses());
         menuButtons[2].setOnAction(e -> showManageSubjects());
         menuButtons[3].setOnAction(e -> showManageClasses());
@@ -69,13 +73,145 @@ public class AdminDashboard {
         mainLayout.setTop(topBar);
         mainLayout.setLeft(menu);
         
-        showDashboardStatistics();
+        // Show dashboard by default
+        showDashboardHome(); 
         
         Scene scene = new Scene(mainLayout, 1200, 700);
         stage.setScene(scene);
         stage.setTitle("Admin Dashboard");
     }
+
+    /**
+     * NEW: Creates the main statistics dashboard view
+     */
+    private void showDashboardHome() {
+        VBox content = new VBox(30);
+        content.setPadding(new Insets(30));
+        
+        Label title = new Label("System Statistics");
+        title.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
+
+        // Info Boxes
+        GridPane infoGrid = new GridPane();
+        infoGrid.setHgap(20);
+        infoGrid.setVgap(20);
+        infoGrid.setAlignment(Pos.CENTER);
+
+        int studentCount = getCount("SELECT COUNT(*) FROM users WHERE role = 'STUDENT'");
+        int teacherCount = getCount("SELECT COUNT(*) FROM users WHERE role = 'TEACHER'");
+        int courseCount = getCount("SELECT COUNT(*) FROM courses");
+        int classCount = getCount("SELECT COUNT(*) FROM classes");
+
+        infoGrid.add(createInfoBox("Total Students", String.valueOf(studentCount), "#3498db"), 0, 0);
+        infoGrid.add(createInfoBox("Total Teachers", String.valueOf(teacherCount), "#2ecc71"), 1, 0);
+        infoGrid.add(createInfoBox("Total Courses", String.valueOf(courseCount), "#e67e22"), 0, 1);
+        infoGrid.add(createInfoBox("Total Classes", String.valueOf(classCount), "#9b59b6"), 1, 1);
+
+        // Charts
+        HBox chartBox = new HBox(30);
+        chartBox.setAlignment(Pos.CENTER);
+        
+        PieChart roleChart = createRolePieChart();
+        PieChart attendanceChart = createAttendancePieChart();
+        
+        chartBox.getChildren().addAll(roleChart, attendanceChart);
+        
+        content.getChildren().addAll(title, infoGrid, chartBox);
+        
+        ScrollPane scrollPane = new ScrollPane(content);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setStyle("-fx-background-color: transparent;");
+        mainLayout.setCenter(scrollPane);
+    }
     
+    /**
+     * NEW: Helper to create a styled info box
+     */
+    private VBox createInfoBox(String title, String value, String color) {
+        VBox box = new VBox(10);
+        box.setPadding(new Insets(20));
+        box.setAlignment(Pos.CENTER);
+        box.setPrefSize(200, 100);
+        box.setStyle("-fx-background-color: " + color + "; -fx-background-radius: 8;");
+        
+        Label titleLabel = new Label(title);
+        titleLabel.setStyle("-fx-text-fill: white; -fx-font-size: 16px;");
+        
+        Label valueLabel = new Label(value);
+        valueLabel.setStyle("-fx-text-fill: white; -fx-font-size: 28px; -fx-font-weight: bold;");
+        
+        box.getChildren().addAll(titleLabel, valueLabel);
+        return box;
+    }
+
+    /**
+     * NEW: Helper to get a single count from the database
+     */
+    private int getCount(String query) {
+        try (Connection conn = DatabaseConfig.getConnection();
+             PreparedStatement ps = conn.prepareStatement(query);
+             ResultSet rs = ps.executeQuery()) {
+            if (rs.next()) {
+                return rs.getInt(1);
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+        return 0;
+    }
+    
+    /**
+     * NEW: Creates the Pie Chart for user roles
+     */
+    private PieChart createRolePieChart() {
+        ObservableList<PieChart.Data> pieChartData = FXCollections.observableArrayList();
+        
+        String query = "SELECT role, COUNT(*) as count FROM users GROUP BY role";
+        
+        try (Connection conn = DatabaseConfig.getConnection();
+             PreparedStatement ps = conn.prepareStatement(query);
+             ResultSet rs = ps.executeQuery()) {
+            
+            while (rs.next()) {
+                pieChartData.add(new PieChart.Data(rs.getString("role"), rs.getInt("count")));
+            }
+            
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+        
+        PieChart chart = new PieChart(pieChartData);
+        chart.setTitle("User Roles");
+        return chart;
+    }
+
+    /**
+     * NEW: Creates the Pie Chart for overall attendance
+     */
+    private PieChart createAttendancePieChart() {
+        ObservableList<PieChart.Data> pieChartData = FXCollections.observableArrayList();
+        
+        String query = "SELECT status, COUNT(*) as count FROM attendance GROUP BY status";
+        
+        try (Connection conn = DatabaseConfig.getConnection();
+             PreparedStatement ps = conn.prepareStatement(query);
+             ResultSet rs = ps.executeQuery()) {
+            
+            while (rs.next()) {
+                pieChartData.add(new PieChart.Data(rs.getString("status"), rs.getInt("count")));
+            }
+            
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+        
+        PieChart chart = new PieChart(pieChartData);
+        chart.setTitle("Overall Attendance");
+        return chart;
+    }
+
+    // --- End of new methods ---
+
     private Button createMenuButton(String text) {
         Button btn = new Button(text);
         btn.setMaxWidth(Double.MAX_VALUE);
@@ -83,201 +219,6 @@ public class AdminDashboard {
         btn.setOnMouseEntered(e -> btn.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-alignment: CENTER-LEFT; -fx-padding: 12; -fx-cursor: hand;"));
         btn.setOnMouseExited(e -> btn.setStyle("-fx-background-color: transparent; -fx-text-fill: white; -fx-alignment: CENTER-LEFT; -fx-padding: 12; -fx-cursor: hand;"));
         return btn;
-    }
-    
-    private void showDashboardStatistics() {
-        VBox content = new VBox(20);
-        content.setPadding(new Insets(30));
-        
-        Label title = new Label("Dashboard Statistics");
-        title.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
-        
-        // Statistics cards container
-        GridPane statsGrid = new GridPane();
-        statsGrid.setHgap(20);
-        statsGrid.setVgap(20);
-        
-        try (Connection conn = DatabaseConfig.getConnection()) {
-            // Total Courses
-            VBox courseCard = createStatCard("Total Courses", getCount(conn, "SELECT COUNT(*) FROM courses"), "#3498db");
-            
-            // Total Subjects
-            VBox subjectCard = createStatCard("Total Subjects", getCount(conn, "SELECT COUNT(*) FROM subjects"), "#9b59b6");
-            
-            // Total Classes
-            VBox classCard = createStatCard("Total Classes", getCount(conn, "SELECT COUNT(*) FROM classes"), "#e67e22");
-            
-            // Total Students
-            VBox studentCard = createStatCard("Total Students", getCount(conn, "SELECT COUNT(*) FROM users WHERE role = 'STUDENT'"), "#27ae60");
-            
-            // Total Teachers
-            VBox teacherCard = createStatCard("Total Teachers", getCount(conn, "SELECT COUNT(*) FROM users WHERE role = 'TEACHER'"), "#f39c12");
-            
-            // Total Defaulters
-            int defaulterCount = getDefaulterCount(conn);
-            VBox defaulterCard = createStatCard("Total Defaulters", String.valueOf(defaulterCount), "#e74c3c");
-            
-            // Average Attendance
-            double avgAttendance = getAverageAttendance(conn);
-            VBox attendanceCard = createStatCard("Average Attendance", String.format("%.1f%%", avgAttendance), "#1abc9c");
-            
-            // Recent Activity
-            VBox activityCard = createStatCard("Today's Attendance", getTodayAttendanceCount(conn), "#34495e");
-            
-            statsGrid.add(courseCard, 0, 0);
-            statsGrid.add(subjectCard, 1, 0);
-            statsGrid.add(classCard, 2, 0);
-            statsGrid.add(studentCard, 3, 0);
-            statsGrid.add(teacherCard, 0, 1);
-            statsGrid.add(defaulterCard, 1, 1);
-            statsGrid.add(attendanceCard, 2, 1);
-            statsGrid.add(activityCard, 3, 1);
-            
-        } catch (Exception ex) {
-            Label errorLabel = new Label("Error loading statistics: " + ex.getMessage());
-            errorLabel.setStyle("-fx-text-fill: red;");
-            content.getChildren().addAll(title, errorLabel);
-            mainLayout.setCenter(content);
-            return;
-        }
-        
-        // Recent Defaulters Table
-        Label defaultersTitle = new Label("Recent Defaulters (Below 75%)");
-        defaultersTitle.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-padding: 20 0 10 0;");
-        
-        TableView<Map<String, Object>> defaultersTable = new TableView<>();
-        defaultersTable.setPrefHeight(200);
-        
-        TableColumn<Map<String, Object>, String> studentCol = new TableColumn<>("Student");
-        studentCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("student").toString()));
-        studentCol.setPrefWidth(200);
-        
-        TableColumn<Map<String, Object>, String> classCol = new TableColumn<>("Class");
-        classCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("class").toString()));
-        classCol.setPrefWidth(150);
-        
-        TableColumn<Map<String, Object>, String> subjectCol = new TableColumn<>("Subject");
-        subjectCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("subject").toString()));
-        subjectCol.setPrefWidth(150);
-        
-        TableColumn<Map<String, Object>, String> percentCol = new TableColumn<>("Attendance %");
-        percentCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("percentage").toString()));
-        percentCol.setPrefWidth(120);
-        
-        defaultersTable.getColumns().addAll(studentCol, classCol, subjectCol, percentCol);
-        
-        loadDefaultersData(defaultersTable);
-        
-        content.getChildren().addAll(title, statsGrid, defaultersTitle, defaultersTable);
-        
-        ScrollPane scrollPane = new ScrollPane(content);
-        scrollPane.setFitToWidth(true);
-        mainLayout.setCenter(scrollPane);
-    }
-    
-    private VBox createStatCard(String title, String value, String color) {
-        VBox card = new VBox(10);
-        card.setAlignment(Pos.CENTER);
-        card.setPadding(new Insets(20));
-        card.setStyle("-fx-background-color: " + color + "; -fx-background-radius: 10; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 5, 0, 0, 2);");
-        card.setPrefWidth(150);
-        card.setPrefHeight(100);
-        
-        Label titleLabel = new Label(title);
-        titleLabel.setStyle("-fx-text-fill: white; -fx-font-size: 12px; -fx-font-weight: bold;");
-        titleLabel.setWrapText(true);
-        titleLabel.setAlignment(Pos.CENTER);
-        
-        Label valueLabel = new Label(value);
-        valueLabel.setStyle("-fx-text-fill: white; -fx-font-size: 24px; -fx-font-weight: bold;");
-        
-        card.getChildren().addAll(titleLabel, valueLabel);
-        return card;
-    }
-    
-    private String getCount(Connection conn, String query) throws SQLException {
-        try (Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(query)) {
-            if (rs.next()) {
-                return String.valueOf(rs.getInt(1));
-            }
-        }
-        return "0";
-    }
-    
-    private int getDefaulterCount(Connection conn) throws SQLException {
-        String query = "SELECT COUNT(DISTINCT u.id) FROM users u " +
-                      "JOIN class_students cs ON u.id = cs.student_id " +
-                      "JOIN attendance a ON u.id = a.student_id " +
-                      "WHERE u.role = 'STUDENT' " +
-                      "GROUP BY u.id, a.subject_id, a.class_id " +
-                      "HAVING (SUM(CASE WHEN a.status = 'PRESENT' THEN 1 ELSE 0 END) * 100.0 / COUNT(*)) < 75";
-        
-        try (Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM (" + query + ") as defaulters")) {
-            if (rs.next()) {
-                return rs.getInt(1);
-            }
-        }
-        return 0;
-    }
-    
-    private double getAverageAttendance(Connection conn) throws SQLException {
-        String query = "SELECT AVG(attendance_percentage) FROM (" +
-                      "SELECT (SUM(CASE WHEN a.status = 'PRESENT' THEN 1 ELSE 0 END) * 100.0 / COUNT(*)) as attendance_percentage " +
-                      "FROM attendance a " +
-                      "GROUP BY a.student_id, a.subject_id, a.class_id" +
-                      ") as student_attendance";
-        
-        try (Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(query)) {
-            if (rs.next()) {
-                return rs.getDouble(1);
-            }
-        }
-        return 0.0;
-    }
-    
-    private String getTodayAttendanceCount(Connection conn) throws SQLException {
-        String query = "SELECT COUNT(*) FROM attendance WHERE DATE(marked_at) = CURDATE()";
-        
-        try (Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(query)) {
-            if (rs.next()) {
-                return String.valueOf(rs.getInt(1));
-            }
-        }
-        return "0";
-    }
-    
-    private void loadDefaultersData(TableView<Map<String, Object>> table) {
-        try (Connection conn = DatabaseConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(
-                 "SELECT u.name as student, cl.name as class, s.name as subject, " +
-                 "(SUM(CASE WHEN a.status = 'PRESENT' THEN 1 ELSE 0 END) * 100.0 / COUNT(*)) as percentage " +
-                 "FROM users u " +
-                 "JOIN class_students cs ON u.id = cs.student_id " +
-                 "JOIN classes cl ON cs.class_id = cl.id " +
-                 "JOIN attendance a ON u.id = a.student_id AND a.class_id = cl.id " +
-                 "JOIN subjects s ON a.subject_id = s.id " +
-                 "WHERE u.role = 'STUDENT' " +
-                 "GROUP BY u.id, a.subject_id, a.class_id " +
-                 "HAVING percentage < 75 " +
-                 "ORDER BY percentage ASC " +
-                 "LIMIT 10")) {
-            
-            ResultSet rs = ps.executeQuery();
-            while (rs.next()) {
-                Map<String, Object> row = new HashMap<>();
-                row.put("student", rs.getString("student"));
-                row.put("class", rs.getString("class"));
-                row.put("subject", rs.getString("subject"));
-                row.put("percentage", String.format("%.1f%%", rs.getDouble("percentage")));
-                table.getItems().add(row);
-            }
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
     }
     
     private void showManageCourses() {
@@ -858,11 +799,17 @@ public class AdminDashboard {
         
         // Add student form
         VBox addForm = new VBox(10);
-        TextField usernameField = new TextField();
+        addForm.setPadding(new Insets(15));
+        addForm.setStyle("-fx-background-color: #f4f4f4; -fx-background-radius: 5;");
+        HBox row1 = new HBox(10, new Label("Username:"), new TextField());
+        HBox row2 = new HBox(10, new Label("Password:"), new TextField());
+        HBox row3 = new HBox(10, new Label("Full Name:"), new TextField());
+        
+        TextField usernameField = (TextField) row1.getChildren().get(1);
         usernameField.setPromptText("Username");
-        TextField passwordField = new TextField();
+        TextField passwordField = (TextField) row2.getChildren().get(1);
         passwordField.setPromptText("Password");
-        TextField nameField = new TextField();
+        TextField nameField = (TextField) row3.getChildren().get(1);
         nameField.setPromptText("Full Name");
         
         ComboBox<String> classCombo = new ComboBox<>();
@@ -921,7 +868,7 @@ public class AdminDashboard {
             }
         });
         
-        addForm.getChildren().addAll(usernameField, passwordField, nameField, classCombo, addBtn, msgLabel);
+        addForm.getChildren().addAll(row1, row2, row3, classCombo, addBtn, msgLabel);
         
         TableView<Map<String, Object>> table = new TableView<>();
         TableColumn<Map<String, Object>, String> idCol = new TableColumn<>("ID");
@@ -990,6 +937,7 @@ public class AdminDashboard {
         content.getChildren().addAll(title, addForm, table);
         ScrollPane scrollPane = new ScrollPane(content);
         scrollPane.setFitToWidth(true);
+        scrollPane.setStyle("-fx-background-color: transparent;");
         mainLayout.setCenter(scrollPane);
     }
     
@@ -1007,6 +955,7 @@ public class AdminDashboard {
         
         ComboBox<String> classCombo = new ComboBox<>();
         loadClassesIntoCombo(classCombo);
+        classCombo.setPromptText("Change Class (optional)");
         
         Button saveBtn = new Button("Save");
         saveBtn.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white;");
@@ -1120,6 +1069,8 @@ public class AdminDashboard {
         createTeacherBtn.setOnAction(e -> showCreateTeacherDialog());
         
         VBox assignForm = new VBox(10);
+        assignForm.setPadding(new Insets(15));
+        assignForm.setStyle("-fx-background-color: #f4f4f4; -fx-background-radius: 5;");
         
         ComboBox<String> teacherCombo = new ComboBox<>();
         loadTeachersIntoCombo(teacherCombo);
@@ -1353,17 +1304,16 @@ public class AdminDashboard {
                      PreparedStatement ps = conn.prepareStatement(
                          "SELECT u.name as student, s.name as subject, " +
                          "COUNT(CASE WHEN a.status = 'PRESENT' THEN 1 END) as present, " +
-                         "COUNT(*) as total " +
+                         "COUNT(a.id) as total " + // Changed from COUNT(*)
                          "FROM class_students cs " +
                          "JOIN users u ON cs.student_id = u.id " +
-                         "JOIN subjects s ON s.course_id = (SELECT course_id FROM classes WHERE id = ?) " +
-                         "LEFT JOIN attendance a ON a.student_id = u.id AND a.subject_id = s.id AND a.class_id = ? " +
+                         "JOIN classes cl ON cs.class_id = cl.id " +
+                         "JOIN subjects s ON s.course_id = cl.course_id " +
+                         "LEFT JOIN attendance a ON a.student_id = u.id AND a.subject_id = s.id AND a.class_id = cl.id " +
                          "WHERE cs.class_id = ? " +
                          "GROUP BY u.id, s.id " +
-                         "HAVING total > 0")) {
+                         "HAVING total > 0")) { // Only show subjects with recorded attendance
                     ps.setInt(1, classId);
-                    ps.setInt(2, classId);
-                    ps.setInt(3, classId);
                     ResultSet rs = ps.executeQuery();
                     
                     while (rs.next()) {
@@ -1400,6 +1350,7 @@ public class AdminDashboard {
     }
     
     private void loadCoursesIntoCombo(ComboBox<String> combo) {
+        combo.getItems().clear();
         try (Connection conn = DatabaseConfig.getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery("SELECT id, name FROM courses")) {
@@ -1412,6 +1363,7 @@ public class AdminDashboard {
     }
     
     private void loadClassesIntoCombo(ComboBox<String> combo) {
+        combo.getItems().clear();
         try (Connection conn = DatabaseConfig.getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery("SELECT id, name FROM classes")) {
@@ -1424,6 +1376,7 @@ public class AdminDashboard {
     }
     
     private void loadTeachersIntoCombo(ComboBox<String> combo) {
+        combo.getItems().clear();
         try (Connection conn = DatabaseConfig.getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery("SELECT id, name FROM users WHERE role = 'TEACHER'")) {
