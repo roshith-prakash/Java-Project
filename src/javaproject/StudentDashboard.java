@@ -177,7 +177,16 @@ public class StudentDashboard {
         infoLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #7f8c8d;");
         
         content.getChildren().addAll(title, table, infoLabel);
-        mainLayout.setCenter(content);
+        
+        // Wrap content in ScrollPane to make it scrollable
+        ScrollPane scrollPane = new ScrollPane(content);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setFitToHeight(true);
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scrollPane.setStyle("-fx-background-color: transparent;");
+        
+        mainLayout.setCenter(scrollPane);
     }
     
     private void showLectureCount() {
@@ -227,7 +236,16 @@ public class StudentDashboard {
         }
         
         content.getChildren().addAll(title, table);
-        mainLayout.setCenter(content);
+        
+        // Wrap content in ScrollPane to make it scrollable
+        ScrollPane scrollPane = new ScrollPane(content);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setFitToHeight(true);
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scrollPane.setStyle("-fx-background-color: transparent;");
+        
+        mainLayout.setCenter(scrollPane);
     }
     
     private void showDefaulterStatus() {
@@ -476,6 +494,7 @@ public class StudentDashboard {
                 while (rs.next()) {
                     String subjectName = rs.getString("subject_name");
                     String date = rs.getDate("date").toLocalDate().format(formatter);
+                    String timeSlot = rs.getString("time_slot");
                     String status = rs.getString("status");
                     
                     if (!currentSubject.equals(subjectName)) {
@@ -484,10 +503,12 @@ public class StudentDashboard {
                         }
                         currentSubject = subjectName;
                         report.append("Subject: ").append(subjectName).append("\n");
-                        report.append("-".repeat(30)).append("\n");
+                        report.append("-".repeat(40)).append("\n");
                     }
                     
-                    report.append(String.format("%-12s : %s\n", date, status));
+                    // Format time slot for display (e.g., "09:00:00" -> "09:00-10:00")
+                    String displayTime = formatTimeSlot(timeSlot);
+                    report.append(String.format("%-12s %-12s : %s\n", date, displayTime, status));
                     
                     // Update statistics
                     subjectStats.putIfAbsent(subjectName, new int[2]);
@@ -536,7 +557,7 @@ public class StudentDashboard {
     
     private String buildAttendanceQuery(String subject, LocalDate fromDate, LocalDate toDate) {
         StringBuilder query = new StringBuilder(
-            "SELECT s.name as subject_name, a.date, a.status " +
+            "SELECT s.name as subject_name, a.date, a.time_slot, a.status " +
             "FROM attendance a " +
             "JOIN subjects s ON a.subject_id = s.id " +
             "WHERE a.student_id = ?"
@@ -554,7 +575,7 @@ public class StudentDashboard {
             query.append(" AND a.date <= ?");
         }
         
-        query.append(" ORDER BY s.name, a.date");
+        query.append(" ORDER BY s.name, a.date, a.time_slot");
         
         return query.toString();
     }
@@ -575,6 +596,20 @@ public class StudentDashboard {
         
         if (toDate != null) {
             ps.setDate(paramIndex++, java.sql.Date.valueOf(toDate));
+        }
+    }
+    
+    private String formatTimeSlot(String timeSlot) {
+        if (timeSlot == null) return "N/A";
+        
+        try {
+            // Convert "09:00:00" to "09:00-10:00"
+            String[] parts = timeSlot.split(":");
+            int hour = Integer.parseInt(parts[0]);
+            int nextHour = hour + 1;
+            return String.format("%02d:00-%02d:00", hour, nextHour);
+        } catch (Exception e) {
+            return timeSlot; // Return original if parsing fails
         }
     }
     

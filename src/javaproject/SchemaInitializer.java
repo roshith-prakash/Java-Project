@@ -3,6 +3,7 @@ package javaproject;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
 
 public class SchemaInitializer {
@@ -78,7 +79,7 @@ public class SchemaInitializer {
                 "UNIQUE KEY unique_subject_class (subject_id, class_id))"
             );
             
-            // Create attendance table
+            // Create attendance table with time slot support
             stmt.executeUpdate(
                 "CREATE TABLE IF NOT EXISTS attendance (" +
                 "id INT AUTO_INCREMENT PRIMARY KEY," +
@@ -86,6 +87,7 @@ public class SchemaInitializer {
                 "subject_id INT NOT NULL," +
                 "class_id INT NOT NULL," +
                 "date DATE NOT NULL," +
+                "time_slot TIME NOT NULL," +
                 "status ENUM('PRESENT', 'ABSENT') NOT NULL," +
                 "marked_by INT NOT NULL," +
                 "marked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
@@ -93,8 +95,29 @@ public class SchemaInitializer {
                 "FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE," +
                 "FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE," +
                 "FOREIGN KEY (marked_by) REFERENCES users(id)," +
-                "UNIQUE KEY unique_attendance (student_id, subject_id, class_id, date))"
+                "UNIQUE KEY unique_attendance (student_id, subject_id, class_id, date, time_slot))"
             );
+            
+            // Add time_slot column to existing attendance table if it doesn't exist
+            try {
+                stmt.executeUpdate("ALTER TABLE attendance ADD COLUMN time_slot TIME NOT NULL DEFAULT '09:00:00'");
+                System.out.println("Added time_slot column to existing attendance table");
+            } catch (Exception e) {
+                // Column might already exist, ignore error
+                if (!e.getMessage().contains("Duplicate column name")) {
+                    System.out.println("Note: time_slot column may already exist");
+                }
+            }
+            
+            // Update unique constraint to include time_slot
+            try {
+                stmt.executeUpdate("ALTER TABLE attendance DROP INDEX unique_attendance");
+                stmt.executeUpdate("ALTER TABLE attendance ADD UNIQUE KEY unique_attendance (student_id, subject_id, class_id, date, time_slot)");
+                System.out.println("Updated unique constraint to include time_slot");
+            } catch (Exception e) {
+                // Constraint might already be updated, ignore error
+                System.out.println("Note: unique constraint may already be updated");
+            }
             
             // Check if default admin exists
             try (PreparedStatement ps = conn.prepareStatement(

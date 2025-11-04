@@ -377,7 +377,16 @@ public class AdminDashboard {
         }
         
         content.getChildren().addAll(title, addForm, table);
-        mainLayout.setCenter(content);
+        
+        // Wrap content in ScrollPane to make it scrollable
+        ScrollPane scrollPane = new ScrollPane(content);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setFitToHeight(true);
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scrollPane.setStyle("-fx-background-color: transparent;");
+        
+        mainLayout.setCenter(scrollPane);
     }
     
     private void showEditCourseDialog(Map<String, Object> course) {
@@ -551,7 +560,16 @@ public class AdminDashboard {
         }
         
         content.getChildren().addAll(title, addForm, table);
-        mainLayout.setCenter(content);
+        
+        // Wrap content in ScrollPane to make it scrollable
+        ScrollPane scrollPane = new ScrollPane(content);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setFitToHeight(true);
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scrollPane.setStyle("-fx-background-color: transparent;");
+        
+        mainLayout.setCenter(scrollPane);
     }
     
     private void showEditSubjectDialog(Map<String, Object> subject) {
@@ -737,7 +755,16 @@ public class AdminDashboard {
         }
         
         content.getChildren().addAll(title, addForm, table);
-        mainLayout.setCenter(content);
+        
+        // Wrap content in ScrollPane to make it scrollable
+        ScrollPane scrollPane = new ScrollPane(content);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setFitToHeight(true);
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scrollPane.setStyle("-fx-background-color: transparent;");
+        
+        mainLayout.setCenter(scrollPane);
     }
     
     private void showEditClassDialog(Map<String, Object> classData) {
@@ -1200,7 +1227,16 @@ public class AdminDashboard {
         }
         
         content.getChildren().addAll(title, createTeacherBtn, assignForm, table);
-        mainLayout.setCenter(content);
+        
+        // Wrap content in ScrollPane to make it scrollable
+        ScrollPane scrollPane = new ScrollPane(content);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setFitToHeight(true);
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scrollPane.setStyle("-fx-background-color: transparent;");
+        
+        mainLayout.setCenter(scrollPane);
     }
     
     private void deleteAssignment(int assignmentId) {
@@ -1351,7 +1387,16 @@ public class AdminDashboard {
         });
         
         content.getChildren().addAll(title, classCombo, table);
-        mainLayout.setCenter(content);
+        
+        // Wrap content in ScrollPane to make it scrollable
+        ScrollPane scrollPane = new ScrollPane(content);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setFitToHeight(true);
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scrollPane.setStyle("-fx-background-color: transparent;");
+        
+        mainLayout.setCenter(scrollPane);
     }
     
     private void loadCoursesIntoCombo(ComboBox<String> combo) {
