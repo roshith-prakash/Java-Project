@@ -16,109 +16,202 @@ public class SchemaInitializer {
             stmt.executeUpdate("CREATE DATABASE IF NOT EXISTS javaproject");
             stmt.executeUpdate("USE javaproject");
             
+            System.out.println("Starting database table creation...");
+            
             // Create users table
-            stmt.executeUpdate(
-                "CREATE TABLE IF NOT EXISTS users (" +
-                "id INT AUTO_INCREMENT PRIMARY KEY," +
-                "username VARCHAR(50) UNIQUE NOT NULL," +
-                "password VARCHAR(100) NOT NULL," +
-                "role ENUM('ADMIN', 'TEACHER', 'STUDENT') NOT NULL," +
-                "name VARCHAR(100) NOT NULL," +
-                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
-            );
+            try {
+                System.out.println("Creating users table...");
+                stmt.executeUpdate(
+                    "CREATE TABLE IF NOT EXISTS users (" +
+                    "id INT AUTO_INCREMENT PRIMARY KEY," +
+                    "username VARCHAR(50) UNIQUE NOT NULL," +
+                    "password VARCHAR(100) NOT NULL," +
+                    "role ENUM('ADMIN', 'TEACHER', 'STUDENT') NOT NULL," +
+                    "name VARCHAR(100) NOT NULL," +
+                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+                );
+                System.out.println("✓ Users table created successfully");
+            } catch (Exception e) {
+                System.err.println("✗ Error creating users table: " + e.getMessage());
+            }
             
             // Create courses table
-            stmt.executeUpdate(
-                "CREATE TABLE IF NOT EXISTS courses (" +
-                "id INT AUTO_INCREMENT PRIMARY KEY," +
-                "name VARCHAR(100) UNIQUE NOT NULL," +
-                "description TEXT," +
-                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
-            );
+            try {
+                System.out.println("Creating courses table...");
+                stmt.executeUpdate(
+                    "CREATE TABLE IF NOT EXISTS courses (" +
+                    "id INT AUTO_INCREMENT PRIMARY KEY," +
+                    "name VARCHAR(100) UNIQUE NOT NULL," +
+                    "description TEXT," +
+                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+                );
+                System.out.println("✓ Courses table created successfully");
+            } catch (Exception e) {
+                System.err.println("✗ Error creating courses table: " + e.getMessage());
+            }
+            
+            // Create classes table (must come before subjects due to foreign key dependencies)
+            try {
+                System.out.println("Creating classes table...");
+                stmt.executeUpdate(
+                    "CREATE TABLE IF NOT EXISTS classes (" +
+                    "id INT AUTO_INCREMENT PRIMARY KEY," +
+                    "name VARCHAR(100) NOT NULL," +
+                    "course_id INT NOT NULL," +
+                    "FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE," +
+                    "UNIQUE KEY unique_class_course (name, course_id))"
+                );
+                System.out.println("✓ Classes table created successfully");
+            } catch (Exception e) {
+                System.err.println("✗ Error creating classes table: " + e.getMessage());
+            }
             
             // Create subjects table
-            stmt.executeUpdate(
-                "CREATE TABLE IF NOT EXISTS subjects (" +
-                "id INT AUTO_INCREMENT PRIMARY KEY," +
-                "name VARCHAR(100) NOT NULL," +
-                "course_id INT NOT NULL," +
-                "FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE," +
-                "UNIQUE KEY unique_subject_course (name, course_id))"
-            );
+            try {
+                System.out.println("Creating subjects table...");
+                stmt.executeUpdate(
+                    "CREATE TABLE IF NOT EXISTS subjects (" +
+                    "id INT AUTO_INCREMENT PRIMARY KEY," +
+                    "name VARCHAR(100) NOT NULL," +
+                    "course_id INT NOT NULL," +
+                    "total_lectures INT DEFAULT 0," +
+                    "conducted_lectures INT DEFAULT 0," +
+                    "FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE," +
+                    "UNIQUE KEY unique_subject_course (name, course_id))"
+                );
+                System.out.println("✓ Subjects table created successfully");
+            } catch (Exception e) {
+                System.err.println("✗ Error creating subjects table: " + e.getMessage());
+            }
             
-            // Create classes table
-            stmt.executeUpdate(
-                "CREATE TABLE IF NOT EXISTS classes (" +
-                "id INT AUTO_INCREMENT PRIMARY KEY," +
-                "name VARCHAR(100) NOT NULL," +
-                "course_id INT NOT NULL," +
-                "FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE," +
-                "UNIQUE KEY unique_class_course (name, course_id))"
-            );
+            // Add lecture tracking columns to existing subjects table if they don't exist
+            try {
+                stmt.executeUpdate("ALTER TABLE subjects ADD COLUMN total_lectures INT DEFAULT 0");
+                System.out.println("Added total_lectures column to subjects table");
+            } catch (Exception e) {
+                if (!e.getMessage().contains("Duplicate column name")) {
+                    System.out.println("Note: total_lectures column may already exist");
+                }
+            }
+            
+            try {
+                stmt.executeUpdate("ALTER TABLE subjects ADD COLUMN conducted_lectures INT DEFAULT 0");
+                System.out.println("Added conducted_lectures column to subjects table");
+            } catch (Exception e) {
+                if (!e.getMessage().contains("Duplicate column name")) {
+                    System.out.println("Note: conducted_lectures column may already exist");
+                }
+            }
             
             // Create class_students table
-            stmt.executeUpdate(
-                "CREATE TABLE IF NOT EXISTS class_students (" +
-                "class_id INT NOT NULL," +
-                "student_id INT NOT NULL," +
-                "PRIMARY KEY (class_id, student_id)," +
-                "FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE," +
-                "FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE)"
-            );
+            try {
+                System.out.println("Creating class_students table...");
+                stmt.executeUpdate(
+                    "CREATE TABLE IF NOT EXISTS class_students (" +
+                    "class_id INT NOT NULL," +
+                    "student_id INT NOT NULL," +
+                    "PRIMARY KEY (class_id, student_id)," +
+                    "FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE," +
+                    "FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE)"
+                );
+                System.out.println("✓ Class_students table created successfully");
+            } catch (Exception e) {
+                System.err.println("✗ Error creating class_students table: " + e.getMessage());
+            }
             
             // Create subject_assignments table
-            stmt.executeUpdate(
-                "CREATE TABLE IF NOT EXISTS subject_assignments (" +
-                "id INT AUTO_INCREMENT PRIMARY KEY," +
-                "subject_id INT NOT NULL," +
-                "class_id INT NOT NULL," +
-                "teacher_id INT NOT NULL," +
-                "FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE," +
-                "FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE," +
-                "FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE," +
-                "UNIQUE KEY unique_subject_class (subject_id, class_id))"
-            );
+            try {
+                System.out.println("Creating subject_assignments table...");
+                stmt.executeUpdate(
+                    "CREATE TABLE IF NOT EXISTS subject_assignments (" +
+                    "id INT AUTO_INCREMENT PRIMARY KEY," +
+                    "subject_id INT NOT NULL," +
+                    "class_id INT NOT NULL," +
+                    "teacher_id INT NOT NULL," +
+                    "FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE," +
+                    "FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE," +
+                    "FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE," +
+                    "UNIQUE KEY unique_subject_class (subject_id, class_id))"
+                );
+                System.out.println("✓ Subject_assignments table created successfully");
+            } catch (Exception e) {
+                System.err.println("✗ Error creating subject_assignments table: " + e.getMessage());
+            }
+            
+            // Create lecture_sessions table to track unique lecture sessions
+            try {
+                System.out.println("Creating lecture_sessions table...");
+                stmt.executeUpdate(
+                    "CREATE TABLE IF NOT EXISTS lecture_sessions (" +
+                    "id INT AUTO_INCREMENT PRIMARY KEY," +
+                    "subject_id INT NOT NULL," +
+                    "class_id INT NOT NULL," +
+                    "date DATE NOT NULL," +
+                    "time_slot TIME NOT NULL," +
+                    "conducted_by INT NOT NULL," +
+                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                    "FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE," +
+                    "FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE," +
+                    "FOREIGN KEY (conducted_by) REFERENCES users(id)," +
+                    "UNIQUE KEY unique_lecture_session (subject_id, class_id, date, time_slot))"
+                );
+                System.out.println("✓ Lecture_sessions table created successfully");
+            } catch (Exception e) {
+                System.err.println("✗ Error creating lecture_sessions table: " + e.getMessage());
+            }
             
             // Create attendance table with time slot support
-            stmt.executeUpdate(
-                "CREATE TABLE IF NOT EXISTS attendance (" +
-                "id INT AUTO_INCREMENT PRIMARY KEY," +
-                "student_id INT NOT NULL," +
-                "subject_id INT NOT NULL," +
-                "class_id INT NOT NULL," +
-                "date DATE NOT NULL," +
-                "time_slot TIME NOT NULL," +
-                "status ENUM('PRESENT', 'ABSENT') NOT NULL," +
-                "marked_by INT NOT NULL," +
-                "marked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
-                "FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE," +
-                "FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE," +
-                "FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE," +
-                "FOREIGN KEY (marked_by) REFERENCES users(id)," +
-                "UNIQUE KEY unique_attendance (student_id, subject_id, class_id, date, time_slot))"
-            );
+            try {
+                System.out.println("Creating attendance table...");
+                stmt.executeUpdate(
+                    "CREATE TABLE IF NOT EXISTS attendance (" +
+                    "id INT AUTO_INCREMENT PRIMARY KEY," +
+                    "student_id INT NOT NULL," +
+                    "subject_id INT NOT NULL," +
+                    "class_id INT NOT NULL," +
+                    "date DATE NOT NULL," +
+                    "time_slot TIME NOT NULL," +
+                    "status ENUM('PRESENT', 'ABSENT') NOT NULL," +
+                    "marked_by INT NOT NULL," +
+                    "marked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                    "FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE," +
+                    "FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE," +
+                    "FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE," +
+                    "FOREIGN KEY (marked_by) REFERENCES users(id)," +
+                    "UNIQUE KEY unique_attendance (student_id, subject_id, class_id, date, time_slot))"
+                );
+                System.out.println("✓ Attendance table created successfully");
+            } catch (Exception e) {
+                System.err.println("✗ Error creating attendance table: " + e.getMessage());
+            }
             
             // Create leave_requests table
-            stmt.executeUpdate(
-                "CREATE TABLE IF NOT EXISTS leave_requests (" +
-                "id INT AUTO_INCREMENT PRIMARY KEY," +
-                "student_id INT NOT NULL," +
-                "subject_id INT NOT NULL," +
-                "class_id INT NOT NULL," +
-                "date DATE NOT NULL," +
-                "time_slot TIME NOT NULL," +
-                "reason TEXT NOT NULL," +
-                "status ENUM('PENDING', 'APPROVED', 'REJECTED') DEFAULT 'PENDING'," +
-                "submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
-                "reviewed_by INT NULL," +
-                "reviewed_at TIMESTAMP NULL," +
-                "admin_comments TEXT NULL," +
-                "FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE," +
-                "FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE," +
-                "FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE," +
-                "FOREIGN KEY (reviewed_by) REFERENCES users(id)," +
-                "UNIQUE KEY unique_leave_request (student_id, subject_id, class_id, date, time_slot))"
-            );
+            try {
+                System.out.println("Creating leave_requests table...");
+                stmt.executeUpdate(
+                    "CREATE TABLE IF NOT EXISTS leave_requests (" +
+                    "id INT AUTO_INCREMENT PRIMARY KEY," +
+                    "student_id INT NOT NULL," +
+                    "subject_id INT NOT NULL," +
+                    "class_id INT NOT NULL," +
+                    "date DATE NOT NULL," +
+                    "time_slot TIME NOT NULL," +
+                    "reason TEXT NOT NULL," +
+                    "status ENUM('PENDING', 'APPROVED', 'REJECTED') DEFAULT 'PENDING'," +
+                    "submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                    "reviewed_by INT NULL," +
+                    "reviewed_at TIMESTAMP NULL," +
+                    "admin_comments TEXT NULL," +
+                    "FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE," +
+                    "FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE," +
+                    "FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE," +
+                    "FOREIGN KEY (reviewed_by) REFERENCES users(id)," +
+                    "UNIQUE KEY unique_leave_request (student_id, subject_id, class_id, date, time_slot))"
+                );
+                System.out.println("✓ Leave_requests table created successfully");
+            } catch (Exception e) {
+                System.err.println("✗ Error creating leave_requests table: " + e.getMessage());
+            }
             
             // Add time_slot column to existing attendance table if it doesn't exist
             try {
@@ -143,20 +236,23 @@ public class SchemaInitializer {
             
             // Check if default admin exists
             try (PreparedStatement ps = conn.prepareStatement(
-                "SELECT COUNT(*) FROM javaproject.users WHERE username = ?")) {
+                "SELECT COUNT(*) FROM users WHERE username = ?")) {
                 ps.setString(1, "admin");
                 ResultSet rs = ps.executeQuery();
                 rs.next();
                 if (rs.getInt(1) == 0) {
                     // Insert default admin
                     try (PreparedStatement insert = conn.prepareStatement(
-                        "INSERT INTO javaproject.users (username, password, role, name) VALUES (?, ?, ?, ?)")) {
+                        "INSERT INTO users (username, password, role, name) VALUES (?, ?, ?, ?)")) {
                         insert.setString(1, "admin");
                         insert.setString(2, "admin123"); // Plain text for demo
                         insert.setString(3, "ADMIN");
                         insert.setString(4, "System Administrator");
                         insert.executeUpdate();
+                        System.out.println("Default admin account created successfully!");
                     }
+                } else {
+                    System.out.println("Default admin account already exists");
                 }
             }
             

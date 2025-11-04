@@ -458,19 +458,67 @@ public class AdminDashboard {
         TableColumn<Map<String, Object>, String> courseCol = new TableColumn<>("Course");
         courseCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("course").toString()));
         
+        TableColumn<Map<String, Object>, String> totalLecturesCol = new TableColumn<>("Total Lectures");
+        totalLecturesCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("total_lectures").toString()));
+        totalLecturesCol.setPrefWidth(120);
+        
+        TableColumn<Map<String, Object>, String> conductedLecturesCol = new TableColumn<>("Conducted");
+        conductedLecturesCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("conducted_lectures").toString()));
+        conductedLecturesCol.setPrefWidth(100);
+        
+        TableColumn<Map<String, Object>, String> progressCol = new TableColumn<>("Progress");
+        progressCol.setCellFactory(col -> new TableCell<Map<String, Object>, String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || getTableRow() == null || getTableRow().getItem() == null) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    Map<String, Object> row = getTableRow().getItem();
+                    int total = (Integer) row.get("total_lectures");
+                    int conducted = (Integer) row.get("conducted_lectures");
+                    
+                    if (total > 0) {
+                        double percentage = (conducted * 100.0) / total;
+                        setText(String.format("%.1f%% (%d/%d)", percentage, conducted, total));
+                        
+                        if (percentage >= 90) {
+                            setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-alignment: center;");
+                        } else if (percentage >= 70) {
+                            setStyle("-fx-background-color: #f39c12; -fx-text-fill: white; -fx-alignment: center;");
+                        } else {
+                            setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white; -fx-alignment: center;");
+                        }
+                    } else {
+                        setText("Not Set");
+                        setStyle("-fx-background-color: #95a5a6; -fx-text-fill: white; -fx-alignment: center;");
+                    }
+                }
+            }
+        });
+        progressCol.setPrefWidth(120);
+        
         TableColumn<Map<String, Object>, Void> actionsCol = new TableColumn<>("Actions");
         actionsCol.setCellFactory(param -> new TableCell<>() {
             private final Button editBtn = new Button("Edit");
+            private final Button setLecturesBtn = new Button("Set Lectures");
             private final Button deleteBtn = new Button("Delete");
-            private final HBox pane = new HBox(5, editBtn, deleteBtn);
+            private final HBox pane = new HBox(3, editBtn, setLecturesBtn, deleteBtn);
             
             {
-                editBtn.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-cursor: hand;");
-                deleteBtn.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white; -fx-cursor: hand;");
+                editBtn.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-cursor: hand; -fx-font-size: 10px; -fx-padding: 4 8;");
+                setLecturesBtn.setStyle("-fx-background-color: #f39c12; -fx-text-fill: white; -fx-cursor: hand; -fx-font-size: 10px; -fx-padding: 4 8;");
+                deleteBtn.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white; -fx-cursor: hand; -fx-font-size: 10px; -fx-padding: 4 8;");
                 
                 editBtn.setOnAction(e -> {
                     Map<String, Object> subject = getTableView().getItems().get(getIndex());
                     showEditSubjectDialog(subject);
+                });
+                
+                setLecturesBtn.setOnAction(e -> {
+                    Map<String, Object> subject = getTableView().getItems().get(getIndex());
+                    showSetLecturesDialog(subject);
                 });
                 
                 deleteBtn.setOnAction(e -> {
@@ -486,18 +534,20 @@ public class AdminDashboard {
             }
         });
         
-        table.getColumns().addAll(idCol, nameCol, courseCol, actionsCol);
+        table.getColumns().addAll(idCol, nameCol, courseCol, totalLecturesCol, conductedLecturesCol, progressCol, actionsCol);
         
         try (Connection conn = DatabaseConfig.getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(
-                 "SELECT s.id, s.name, s.course_id, c.name as course FROM subjects s JOIN courses c ON s.course_id = c.id")) {
+                 "SELECT s.id, s.name, s.course_id, c.name as course, s.total_lectures, s.conducted_lectures FROM subjects s JOIN courses c ON s.course_id = c.id")) {
             while (rs.next()) {
                 Map<String, Object> row = new HashMap<>();
                 row.put("id", rs.getInt("id"));
                 row.put("name", rs.getString("name"));
                 row.put("course_id", rs.getInt("course_id"));
                 row.put("course", rs.getString("course"));
+                row.put("total_lectures", rs.getInt("total_lectures"));
+                row.put("conducted_lectures", rs.getInt("conducted_lectures"));
                 table.getItems().add(row);
             }
         } catch (Exception ex) {
@@ -572,6 +622,108 @@ public class AdminDashboard {
         );
         
         Scene scene = new Scene(form, 300, 250);
+        dialog.setScene(scene);
+        dialog.show();
+    }
+    
+    private void showSetLecturesDialog(Map<String, Object> subject) {
+        Stage dialog = new Stage();
+        dialog.setTitle("Set Total Lectures - " + subject.get("name"));
+        dialog.setWidth(400);
+        dialog.setHeight(300);
+        
+        VBox form = new VBox(15);
+        form.setPadding(new Insets(20));
+        
+        Label titleLabel = new Label("Set Total Lectures for " + subject.get("name"));
+        titleLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+        
+        GridPane infoGrid = new GridPane();
+        infoGrid.setHgap(15);
+        infoGrid.setVgap(10);
+        
+        infoGrid.add(new Label("Subject:"), 0, 0);
+        infoGrid.add(new Label(subject.get("name").toString()), 1, 0);
+        infoGrid.add(new Label("Course:"), 0, 1);
+        infoGrid.add(new Label(subject.get("course").toString()), 1, 1);
+        infoGrid.add(new Label("Current Total:"), 0, 2);
+        infoGrid.add(new Label(subject.get("total_lectures").toString()), 1, 2);
+        infoGrid.add(new Label("Conducted:"), 0, 3);
+        infoGrid.add(new Label(subject.get("conducted_lectures").toString()), 1, 3);
+        
+        // Style the labels
+        for (int i = 0; i < 4; i++) {
+            ((Label) infoGrid.getChildren().get(i * 2)).setStyle("-fx-font-weight: bold;");
+        }
+        
+        Label newTotalLabel = new Label("New Total Lectures:");
+        newTotalLabel.setStyle("-fx-font-weight: bold;");
+        
+        TextField totalLecturesField = new TextField();
+        totalLecturesField.setPromptText("Enter total number of lectures");
+        totalLecturesField.setText(subject.get("total_lectures").toString());
+        
+        Label noteLabel = new Label("Note: You can only increase the total lectures, not decrease below conducted lectures.");
+        noteLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #7f8c8d; -fx-wrap-text: true;");
+        
+        HBox buttonBox = new HBox(10);
+        buttonBox.setAlignment(Pos.CENTER);
+        
+        Button saveBtn = new Button("Save");
+        saveBtn.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-cursor: hand;");
+        
+        Button cancelBtn = new Button("Cancel");
+        cancelBtn.setStyle("-fx-background-color: #95a5a6; -fx-text-fill: white; -fx-cursor: hand;");
+        
+        Label msgLabel = new Label();
+        
+        buttonBox.getChildren().addAll(saveBtn, cancelBtn);
+        
+        saveBtn.setOnAction(e -> {
+            try {
+                int newTotal = Integer.parseInt(totalLecturesField.getText().trim());
+                int currentConducted = (Integer) subject.get("conducted_lectures");
+                
+                if (newTotal < 0) {
+                    msgLabel.setText("Total lectures cannot be negative");
+                    msgLabel.setStyle("-fx-text-fill: red;");
+                    return;
+                }
+                
+                if (newTotal < currentConducted) {
+                    msgLabel.setText("Total lectures cannot be less than conducted lectures (" + currentConducted + ")");
+                    msgLabel.setStyle("-fx-text-fill: red;");
+                    return;
+                }
+                
+                try (Connection conn = DatabaseConfig.getConnection();
+                     PreparedStatement ps = conn.prepareStatement(
+                         "UPDATE subjects SET total_lectures = ? WHERE id = ?")) {
+                    
+                    ps.setInt(1, newTotal);
+                    ps.setInt(2, (Integer) subject.get("id"));
+                    ps.executeUpdate();
+                    
+                    dialog.close();
+                    showManageSubjects(); // Refresh the table
+                    
+                } catch (Exception ex) {
+                    msgLabel.setText("Error: " + ex.getMessage());
+                    msgLabel.setStyle("-fx-text-fill: red;");
+                    ex.printStackTrace();
+                }
+                
+            } catch (NumberFormatException ex) {
+                msgLabel.setText("Please enter a valid number");
+                msgLabel.setStyle("-fx-text-fill: red;");
+            }
+        });
+        
+        cancelBtn.setOnAction(e -> dialog.close());
+        
+        form.getChildren().addAll(titleLabel, infoGrid, newTotalLabel, totalLecturesField, noteLabel, buttonBox, msgLabel);
+        
+        Scene scene = new Scene(form);
         dialog.setScene(scene);
         dialog.show();
     }

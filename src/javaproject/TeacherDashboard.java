@@ -295,6 +295,34 @@ public class TeacherDashboard {
                     ps.setInt(7, teacher.getId());
                     
                     int count = ps.executeUpdate();
+                    
+                    // Record lecture session and update conducted lectures count
+                    try (PreparedStatement sessionPs = conn.prepareStatement(
+                        "INSERT INTO lecture_sessions (subject_id, class_id, date, time_slot, conducted_by) " +
+                        "VALUES (?, ?, ?, ?, ?) " +
+                        "ON DUPLICATE KEY UPDATE conducted_by = ?")) {
+                        
+                        sessionPs.setInt(1, subjectId);
+                        sessionPs.setInt(2, classId);
+                        sessionPs.setDate(3, java.sql.Date.valueOf(date));
+                        sessionPs.setString(4, timeValue);
+                        sessionPs.setInt(5, teacher.getId());
+                        sessionPs.setInt(6, teacher.getId());
+                        sessionPs.executeUpdate();
+                    }
+                    
+                    // Update conducted lectures count
+                    try (PreparedStatement updatePs = conn.prepareStatement(
+                        "UPDATE subjects SET conducted_lectures = (" +
+                        "SELECT COUNT(DISTINCT ls.date, ls.time_slot) FROM lecture_sessions ls " +
+                        "WHERE ls.subject_id = ?" +
+                        ") WHERE id = ?")) {
+                        
+                        updatePs.setInt(1, subjectId);
+                        updatePs.setInt(2, subjectId);
+                        updatePs.executeUpdate();
+                    }
+                    
                     msgLabel.setText("Successfully marked " + count + " students as present for " + timeSlot + "!");
                     msgLabel.setStyle("-fx-text-fill: green;");
                     System.out.println("Updated " + count + " attendance records");
@@ -406,6 +434,34 @@ public class TeacherDashboard {
                 ps.setInt(7, teacher.getId());
                 
                 int count = ps.executeUpdate();
+                
+                // Record lecture session and update conducted lectures count
+                try (PreparedStatement sessionPs = conn.prepareStatement(
+                    "INSERT INTO lecture_sessions (subject_id, class_id, date, time_slot, conducted_by) " +
+                    "VALUES (?, ?, ?, ?, ?) " +
+                    "ON DUPLICATE KEY UPDATE conducted_by = ?")) {
+                    
+                    sessionPs.setInt(1, subjectId);
+                    sessionPs.setInt(2, classId);
+                    sessionPs.setDate(3, java.sql.Date.valueOf(date));
+                    sessionPs.setString(4, timeValue);
+                    sessionPs.setInt(5, teacher.getId());
+                    sessionPs.setInt(6, teacher.getId());
+                    sessionPs.executeUpdate();
+                }
+                
+                // Update conducted lectures count
+                try (PreparedStatement updatePs = conn.prepareStatement(
+                    "UPDATE subjects SET conducted_lectures = (" +
+                    "SELECT COUNT(DISTINCT ls.date, ls.time_slot) FROM lecture_sessions ls " +
+                    "WHERE ls.subject_id = ?" +
+                    ") WHERE id = ?")) {
+                    
+                    updatePs.setInt(1, subjectId);
+                    updatePs.setInt(2, subjectId);
+                    updatePs.executeUpdate();
+                }
+                
                 msgLabel.setText("Successfully marked " + count + " students as absent for " + timeSlot + "!");
                 msgLabel.setStyle("-fx-text-fill: green;");
                 
@@ -656,6 +712,34 @@ public class TeacherDashboard {
                     }
                     
                     ps.executeBatch();
+                    
+                    // Record lecture session and update conducted lectures count
+                    try (PreparedStatement sessionPs = conn.prepareStatement(
+                        "INSERT INTO lecture_sessions (subject_id, class_id, date, time_slot, conducted_by) " +
+                        "VALUES (?, ?, ?, ?, ?) " +
+                        "ON DUPLICATE KEY UPDATE conducted_by = ?")) {
+                        
+                        sessionPs.setInt(1, subjectId);
+                        sessionPs.setInt(2, classId);
+                        sessionPs.setDate(3, java.sql.Date.valueOf(date));
+                        sessionPs.setString(4, timeValue);
+                        sessionPs.setInt(5, teacher.getId());
+                        sessionPs.setInt(6, teacher.getId());
+                        sessionPs.executeUpdate();
+                    }
+                    
+                    // Update conducted lectures count
+                    try (PreparedStatement updatePs = conn.prepareStatement(
+                        "UPDATE subjects SET conducted_lectures = (" +
+                        "SELECT COUNT(DISTINCT ls.date, ls.time_slot) FROM lecture_sessions ls " +
+                        "WHERE ls.subject_id = ?" +
+                        ") WHERE id = ?")) {
+                        
+                        updatePs.setInt(1, subjectId);
+                        updatePs.setInt(2, subjectId);
+                        updatePs.executeUpdate();
+                    }
+                    
                     msgLabel.setText("Successfully updated attendance for " + studentsTable.getItems().size() + " students!");
                     msgLabel.setStyle("-fx-text-fill: green;");
                     
@@ -886,6 +970,34 @@ public class TeacherDashboard {
                     }
                     
                     ps.executeBatch();
+                    
+                    // Record lecture session and update conducted lectures count
+                    try (PreparedStatement sessionPs = conn.prepareStatement(
+                        "INSERT INTO lecture_sessions (subject_id, class_id, date, time_slot, conducted_by) " +
+                        "VALUES (?, ?, ?, ?, ?) " +
+                        "ON DUPLICATE KEY UPDATE conducted_by = ?")) {
+                        
+                        sessionPs.setInt(1, subjectId);
+                        sessionPs.setInt(2, classId);
+                        sessionPs.setDate(3, java.sql.Date.valueOf(date));
+                        sessionPs.setString(4, timeValue);
+                        sessionPs.setInt(5, teacher.getId());
+                        sessionPs.setInt(6, teacher.getId());
+                        sessionPs.executeUpdate();
+                    }
+                    
+                    // Update conducted lectures count
+                    try (PreparedStatement updatePs = conn.prepareStatement(
+                        "UPDATE subjects SET conducted_lectures = (" +
+                        "SELECT COUNT(DISTINCT ls.date, ls.time_slot) FROM lecture_sessions ls " +
+                        "WHERE ls.subject_id = ?" +
+                        ") WHERE id = ?")) {
+                        
+                        updatePs.setInt(1, subjectId);
+                        updatePs.setInt(2, subjectId);
+                        updatePs.executeUpdate();
+                    }
+                    
                     conn.commit();
                     
                     msgLabel.setText("Attendance submitted successfully for " + attendanceMap.size() + " students!");
@@ -1200,6 +1312,34 @@ public class TeacherDashboard {
                 ps.setInt(9, teacher.getId());
                 
                 int count = ps.executeUpdate();
+                
+                // Record lecture session and update conducted lectures count
+                try (PreparedStatement sessionPs = conn.prepareStatement(
+                    "INSERT INTO lecture_sessions (subject_id, class_id, date, time_slot, conducted_by) " +
+                    "VALUES (?, ?, ?, ?, ?) " +
+                    "ON DUPLICATE KEY UPDATE conducted_by = ?")) {
+                    
+                    sessionPs.setInt(1, subjectId);
+                    sessionPs.setInt(2, classId);
+                    sessionPs.setDate(3, java.sql.Date.valueOf(date));
+                    sessionPs.setString(4, timeValue);
+                    sessionPs.setInt(5, teacher.getId());
+                    sessionPs.setInt(6, teacher.getId());
+                    sessionPs.executeUpdate();
+                }
+                
+                // Update conducted lectures count
+                try (PreparedStatement updatePs = conn.prepareStatement(
+                    "UPDATE subjects SET conducted_lectures = (" +
+                    "SELECT COUNT(DISTINCT ls.date, ls.time_slot) FROM lecture_sessions ls " +
+                    "WHERE ls.subject_id = ?" +
+                    ") WHERE id = ?")) {
+                    
+                    updatePs.setInt(1, subjectId);
+                    updatePs.setInt(2, subjectId);
+                    updatePs.executeUpdate();
+                }
+                
                 msgLabel.setText("Successfully marked " + count + " students as " + status.toLowerCase() + " for " + timeSlot + "!");
                 msgLabel.setStyle("-fx-text-fill: green;");
             }
