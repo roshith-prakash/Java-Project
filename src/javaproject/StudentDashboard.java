@@ -57,13 +57,15 @@ public class StudentDashboard {
             createMenuButton("My Attendance"),
             createMenuButton("Lecture Count"),
             createMenuButton("Defaulter Status"),
+            createMenuButton("Leave Request"),
             createMenuButton("Export PDF")
         };
         
         menuButtons[0].setOnAction(e -> showMyAttendance());
         menuButtons[1].setOnAction(e -> showLectureCount());
         menuButtons[2].setOnAction(e -> showDefaulterStatus());
-        menuButtons[3].setOnAction(e -> showExportPDF());
+        menuButtons[3].setOnAction(e -> showLeaveRequest());
+        menuButtons[4].setOnAction(e -> showExportPDF());
         
         menu.getChildren().addAll(menuButtons);
         
@@ -143,15 +145,13 @@ public class StudentDashboard {
                  "COUNT(*) as total, " +
                  "SUM(CASE WHEN a.status = 'PRESENT' THEN 1 ELSE 0 END) as present, " +
                  "SUM(CASE WHEN a.status = 'ABSENT' THEN 1 ELSE 0 END) as absent " +
-                 "FROM class_students cs " +
-                 "JOIN classes cl ON cs.class_id = cl.id " +
-                 "JOIN subjects s ON s.course_id = cl.course_id " +
-                 "LEFT JOIN attendance a ON a.student_id = ? AND a.subject_id = s.id AND a.class_id = cl.id " +
-                 "WHERE cs.student_id = ? " +
+                 "FROM attendance a " +
+                 "JOIN subjects s ON a.subject_id = s.id " +
+                 "JOIN classes cl ON a.class_id = cl.id " +
+                 "WHERE a.student_id = ? " +
                  "GROUP BY s.id, cl.id " +
                  "ORDER BY s.name")) {
             ps.setInt(1, student.getId());
-            ps.setInt(2, student.getId());
             ResultSet rs = ps.executeQuery();
             
             while (rs.next()) {
@@ -213,12 +213,11 @@ public class StudentDashboard {
         
         try (Connection conn = DatabaseConfig.getConnection();
              PreparedStatement ps = conn.prepareStatement(
-                 "SELECT s.name as subject, cl.name as class, COUNT(DISTINCT a.date) as lectures " +
-                 "FROM class_students cs " +
-                 "JOIN classes cl ON cs.class_id = cl.id " +
-                 "JOIN subjects s ON s.course_id = cl.course_id " +
-                 "LEFT JOIN attendance a ON a.subject_id = s.id AND a.class_id = cl.id " +
-                 "WHERE cs.student_id = ? " +
+                 "SELECT s.name as subject, cl.name as class, COUNT(DISTINCT a.date, a.time_slot) as lectures " +
+                 "FROM attendance a " +
+                 "JOIN subjects s ON a.subject_id = s.id " +
+                 "JOIN classes cl ON a.class_id = cl.id " +
+                 "WHERE a.student_id = ? " +
                  "GROUP BY s.id, cl.id " +
                  "ORDER BY s.name")) {
             ps.setInt(1, student.getId());
@@ -263,16 +262,14 @@ public class StudentDashboard {
                  "SELECT s.name as subject, cl.name as class, " +
                  "COUNT(*) as total, " +
                  "SUM(CASE WHEN a.status = 'PRESENT' THEN 1 ELSE 0 END) as present " +
-                 "FROM class_students cs " +
-                 "JOIN classes cl ON cs.class_id = cl.id " +
-                 "JOIN subjects s ON s.course_id = cl.course_id " +
-                 "LEFT JOIN attendance a ON a.student_id = ? AND a.subject_id = s.id AND a.class_id = cl.id " +
-                 "WHERE cs.student_id = ? " +
+                 "FROM attendance a " +
+                 "JOIN subjects s ON a.subject_id = s.id " +
+                 "JOIN classes cl ON a.class_id = cl.id " +
+                 "WHERE a.student_id = ? " +
                  "GROUP BY s.id, cl.id " +
                  "HAVING total > 0 " +
                  "ORDER BY s.name")) {
             ps.setInt(1, student.getId());
-            ps.setInt(2, student.getId());
             ResultSet rs = ps.executeQuery();
             
             boolean hasDefaulter = false;
@@ -346,6 +343,318 @@ public class StudentDashboard {
         ScrollPane scrollPane = new ScrollPane(content);
         scrollPane.setFitToWidth(true);
         mainLayout.setCenter(scrollPane);
+    }
+    
+    private void showLeaveRequest() {
+        VBox content = new VBox(20);
+        content.setPadding(new Insets(30));
+        
+        Label title = new Label("Leave Request Management");
+        title.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
+        
+        // Create new leave request section
+        VBox newRequestSection = new VBox(15);
+        newRequestSection.setStyle("-fx-background-color: #f8f9fa; -fx-padding: 20; -fx-background-radius: 10;");
+        
+        Label newRequestTitle = new Label("Submit New Leave Request");
+        newRequestTitle.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #2c3e50;");
+        
+        // Form for new leave request
+        GridPane requestForm = new GridPane();
+        requestForm.setHgap(15);
+        requestForm.setVgap(15);
+        
+        Label subjectLabel = new Label("Subject:");
+        subjectLabel.setStyle("-fx-font-weight: bold;");
+        ComboBox<String> subjectCombo = new ComboBox<>();
+        subjectCombo.setPromptText("Select Subject");
+        loadSubjectsForLeaveRequest(subjectCombo);
+        
+        Label dateLabel = new Label("Date:");
+        dateLabel.setStyle("-fx-font-weight: bold;");
+        DatePicker datePicker = new DatePicker();
+        datePicker.setPromptText("Select date of absence");
+        
+        Label timeSlotLabel = new Label("Time Slot:");
+        timeSlotLabel.setStyle("-fx-font-weight: bold;");
+        ComboBox<String> timeSlotCombo = new ComboBox<>();
+        timeSlotCombo.setPromptText("Select Time Slot");
+        timeSlotCombo.getItems().addAll(
+            "09:00 - 10:00", "10:00 - 11:00", "11:00 - 12:00", "12:00 - 13:00",
+            "13:00 - 14:00", "14:00 - 15:00", "15:00 - 16:00", "16:00 - 17:00"
+        );
+        
+        Label reasonLabel = new Label("Reason:");
+        reasonLabel.setStyle("-fx-font-weight: bold;");
+        TextArea reasonArea = new TextArea();
+        reasonArea.setPromptText("Please provide a detailed reason for your absence...");
+        reasonArea.setPrefRowCount(4);
+        reasonArea.setWrapText(true);
+        
+        requestForm.add(subjectLabel, 0, 0);
+        requestForm.add(subjectCombo, 1, 0);
+        requestForm.add(dateLabel, 0, 1);
+        requestForm.add(datePicker, 1, 1);
+        requestForm.add(timeSlotLabel, 0, 2);
+        requestForm.add(timeSlotCombo, 1, 2);
+        requestForm.add(reasonLabel, 0, 3);
+        requestForm.add(reasonArea, 1, 3);
+        
+        Button submitRequestBtn = new Button("Submit Leave Request");
+        submitRequestBtn.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-font-size: 14px; -fx-cursor: hand; -fx-padding: 10 20;");
+        
+        Label submitMsgLabel = new Label();
+        
+        newRequestSection.getChildren().addAll(newRequestTitle, requestForm, submitRequestBtn, submitMsgLabel);
+        
+        // Existing leave requests section
+        VBox existingRequestsSection = new VBox(15);
+        
+        Label existingRequestsTitle = new Label("My Leave Requests");
+        existingRequestsTitle.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #2c3e50;");
+        
+        TableView<Map<String, Object>> requestsTable = new TableView<>();
+        requestsTable.setPrefHeight(400);
+        
+        TableColumn<Map<String, Object>, String> subjectCol = new TableColumn<>("Subject");
+        subjectCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("subject").toString()));
+        subjectCol.setPrefWidth(150);
+        
+        TableColumn<Map<String, Object>, String> dateCol = new TableColumn<>("Date");
+        dateCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("date").toString()));
+        dateCol.setPrefWidth(100);
+        
+        TableColumn<Map<String, Object>, String> timeCol = new TableColumn<>("Time Slot");
+        timeCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("time_slot").toString()));
+        timeCol.setPrefWidth(120);
+        
+        TableColumn<Map<String, Object>, String> reasonCol = new TableColumn<>("Reason");
+        reasonCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("reason").toString()));
+        reasonCol.setPrefWidth(200);
+        
+        TableColumn<Map<String, Object>, String> statusCol = new TableColumn<>("Status");
+        statusCol.setCellFactory(col -> new TableCell<Map<String, Object>, String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || getTableRow() == null || getTableRow().getItem() == null) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    Map<String, Object> row = getTableRow().getItem();
+                    String status = row.get("status").toString();
+                    setText(status);
+                    
+                    switch (status) {
+                        case "PENDING":
+                            setStyle("-fx-background-color: #f39c12; -fx-text-fill: white; -fx-alignment: center;");
+                            break;
+                        case "APPROVED":
+                            setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-alignment: center;");
+                            break;
+                        case "REJECTED":
+                            setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white; -fx-alignment: center;");
+                            break;
+                        default:
+                            setStyle("");
+                    }
+                }
+            }
+        });
+        statusCol.setPrefWidth(100);
+        
+        TableColumn<Map<String, Object>, String> submittedCol = new TableColumn<>("Submitted");
+        submittedCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("submitted_at").toString()));
+        submittedCol.setPrefWidth(120);
+        
+        TableColumn<Map<String, Object>, String> commentsCol = new TableColumn<>("Admin Comments");
+        commentsCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(
+            data.getValue().get("admin_comments") != null ? data.getValue().get("admin_comments").toString() : ""));
+        commentsCol.setPrefWidth(150);
+        
+        requestsTable.getColumns().addAll(subjectCol, dateCol, timeCol, reasonCol, statusCol, submittedCol, commentsCol);
+        
+        existingRequestsSection.getChildren().addAll(existingRequestsTitle, requestsTable);
+        
+        // Load existing requests
+        loadLeaveRequests(requestsTable);
+        
+        // Submit request event handler
+        submitRequestBtn.setOnAction(e -> {
+            String subject = subjectCombo.getValue();
+            LocalDate date = datePicker.getValue();
+            String timeSlot = timeSlotCombo.getValue();
+            String reason = reasonArea.getText().trim();
+            
+            if (subject == null || subject.isEmpty()) {
+                submitMsgLabel.setText("Please select a subject");
+                submitMsgLabel.setStyle("-fx-text-fill: red;");
+                return;
+            }
+            
+            if (date == null) {
+                submitMsgLabel.setText("Please select a date");
+                submitMsgLabel.setStyle("-fx-text-fill: red;");
+                return;
+            }
+            
+            if (timeSlot == null || timeSlot.isEmpty()) {
+                submitMsgLabel.setText("Please select a time slot");
+                submitMsgLabel.setStyle("-fx-text-fill: red;");
+                return;
+            }
+            
+            if (reason.isEmpty()) {
+                submitMsgLabel.setText("Please provide a reason for your absence");
+                submitMsgLabel.setStyle("-fx-text-fill: red;");
+                return;
+            }
+            
+            // Check if date is not in the future
+            if (date.isAfter(LocalDate.now())) {
+                submitMsgLabel.setText("Cannot submit leave request for future dates");
+                submitMsgLabel.setStyle("-fx-text-fill: red;");
+                return;
+            }
+            
+            // Submit the leave request
+            submitLeaveRequest(subject, date, timeSlot, reason, submitMsgLabel, requestsTable, 
+                             subjectCombo, datePicker, timeSlotCombo, reasonArea);
+        });
+        
+        content.getChildren().addAll(title, newRequestSection, existingRequestsSection);
+        
+        // Wrap content in ScrollPane to make it scrollable
+        ScrollPane scrollPane = new ScrollPane(content);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setFitToHeight(true);
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scrollPane.setStyle("-fx-background-color: transparent;");
+        
+        mainLayout.setCenter(scrollPane);
+    }
+    
+    private void loadLeaveRequests(TableView<Map<String, Object>> table) {
+        table.getItems().clear();
+        
+        try (Connection conn = DatabaseConfig.getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                 "SELECT lr.*, s.name as subject_name " +
+                 "FROM leave_requests lr " +
+                 "JOIN subjects s ON lr.subject_id = s.id " +
+                 "WHERE lr.student_id = ? " +
+                 "ORDER BY lr.submitted_at DESC")) {
+            
+            ps.setInt(1, student.getId());
+            ResultSet rs = ps.executeQuery();
+            
+            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+            DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+            
+            while (rs.next()) {
+                Map<String, Object> row = new HashMap<>();
+                row.put("id", rs.getInt("id"));
+                row.put("subject", rs.getString("subject_name"));
+                row.put("date", rs.getDate("date").toLocalDate().format(dateFormatter));
+                row.put("time_slot", formatTimeSlot(rs.getTime("time_slot").toString()));
+                row.put("reason", rs.getString("reason"));
+                row.put("status", rs.getString("status"));
+                row.put("submitted_at", rs.getTimestamp("submitted_at").toLocalDateTime().format(timeFormatter));
+                row.put("admin_comments", rs.getString("admin_comments"));
+                table.getItems().add(row);
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+    }
+    
+    private void submitLeaveRequest(String subject, LocalDate date, String timeSlot, String reason,
+                                  Label msgLabel, TableView<Map<String, Object>> table,
+                                  ComboBox<String> subjectCombo, DatePicker datePicker,
+                                  ComboBox<String> timeSlotCombo, TextArea reasonArea) {
+        try (Connection conn = DatabaseConfig.getConnection()) {
+            // Get subject and class IDs
+            int subjectId = Integer.parseInt(subject.split(" - ")[0]);
+            String timeValue = timeSlot.split(" - ")[0] + ":00";
+            
+            // Get student's class for this subject
+            try (PreparedStatement classPs = conn.prepareStatement(
+                "SELECT cs.class_id FROM class_students cs " +
+                "JOIN classes cl ON cs.class_id = cl.id " +
+                "JOIN subjects s ON s.course_id = cl.course_id " +
+                "WHERE cs.student_id = ? AND s.id = ? LIMIT 1")) {
+                
+                classPs.setInt(1, student.getId());
+                classPs.setInt(2, subjectId);
+                ResultSet classRs = classPs.executeQuery();
+                
+                if (!classRs.next()) {
+                    msgLabel.setText("Error: Could not find your class for this subject");
+                    msgLabel.setStyle("-fx-text-fill: red;");
+                    return;
+                }
+                
+                int classId = classRs.getInt("class_id");
+                
+                // Check if attendance record exists for this date/time
+                try (PreparedStatement attendancePs = conn.prepareStatement(
+                    "SELECT status FROM attendance WHERE student_id = ? AND subject_id = ? AND class_id = ? AND date = ? AND time_slot = ?")) {
+                    
+                    attendancePs.setInt(1, student.getId());
+                    attendancePs.setInt(2, subjectId);
+                    attendancePs.setInt(3, classId);
+                    attendancePs.setDate(4, java.sql.Date.valueOf(date));
+                    attendancePs.setString(5, timeValue);
+                    
+                    ResultSet attendanceRs = attendancePs.executeQuery();
+                    
+                    if (!attendanceRs.next()) {
+                        msgLabel.setText("No attendance record found for the selected date and time slot");
+                        msgLabel.setStyle("-fx-text-fill: red;");
+                        return;
+                    }
+                    
+                    String currentStatus = attendanceRs.getString("status");
+                    if ("PRESENT".equals(currentStatus)) {
+                        msgLabel.setText("You are already marked present for this lecture");
+                        msgLabel.setStyle("-fx-text-fill: red;");
+                        return;
+                    }
+                }
+                
+                // Insert leave request
+                try (PreparedStatement ps = conn.prepareStatement(
+                    "INSERT INTO leave_requests (student_id, subject_id, class_id, date, time_slot, reason) " +
+                    "VALUES (?, ?, ?, ?, ?, ?)")) {
+                    
+                    ps.setInt(1, student.getId());
+                    ps.setInt(2, subjectId);
+                    ps.setInt(3, classId);
+                    ps.setDate(4, java.sql.Date.valueOf(date));
+                    ps.setString(5, timeValue);
+                    ps.setString(6, reason);
+                    
+                    ps.executeUpdate();
+                    
+                    msgLabel.setText("Leave request submitted successfully! Awaiting admin approval.");
+                    msgLabel.setStyle("-fx-text-fill: green;");
+                    
+                    // Clear form
+                    subjectCombo.setValue(null);
+                    datePicker.setValue(null);
+                    timeSlotCombo.setValue(null);
+                    reasonArea.clear();
+                    
+                    // Refresh the table
+                    loadLeaveRequests(table);
+                }
+            }
+        } catch (Exception ex) {
+            msgLabel.setText("Error: " + ex.getMessage());
+            msgLabel.setStyle("-fx-text-fill: red;");
+            ex.printStackTrace();
+        }
     }
     
     private void logout() {
@@ -446,8 +755,28 @@ public class StudentDashboard {
         try (Connection conn = DatabaseConfig.getConnection();
              PreparedStatement ps = conn.prepareStatement(
                  "SELECT DISTINCT s.id, s.name FROM subjects s " +
-                 "JOIN attendance a ON s.id = a.subject_id " +
-                 "WHERE a.student_id = ? ORDER BY s.name")) {
+                 "JOIN classes cl ON s.course_id = cl.course_id " +
+                 "JOIN class_students cs ON cl.id = cs.class_id " +
+                 "WHERE cs.student_id = ? ORDER BY s.name")) {
+            
+            ps.setInt(1, student.getId());
+            ResultSet rs = ps.executeQuery();
+            
+            while (rs.next()) {
+                combo.getItems().add(rs.getInt("id") + " - " + rs.getString("name"));
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+    }
+    
+    private void loadSubjectsForLeaveRequest(ComboBox<String> combo) {
+        try (Connection conn = DatabaseConfig.getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                 "SELECT DISTINCT s.id, s.name FROM subjects s " +
+                 "JOIN classes cl ON s.course_id = cl.course_id " +
+                 "JOIN class_students cs ON cl.id = cs.class_id " +
+                 "WHERE cs.student_id = ? ORDER BY s.name")) {
             
             ps.setInt(1, student.getId());
             ResultSet rs = ps.executeQuery();

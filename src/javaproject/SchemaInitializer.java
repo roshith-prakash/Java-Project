@@ -98,6 +98,28 @@ public class SchemaInitializer {
                 "UNIQUE KEY unique_attendance (student_id, subject_id, class_id, date, time_slot))"
             );
             
+            // Create leave_requests table
+            stmt.executeUpdate(
+                "CREATE TABLE IF NOT EXISTS leave_requests (" +
+                "id INT AUTO_INCREMENT PRIMARY KEY," +
+                "student_id INT NOT NULL," +
+                "subject_id INT NOT NULL," +
+                "class_id INT NOT NULL," +
+                "date DATE NOT NULL," +
+                "time_slot TIME NOT NULL," +
+                "reason TEXT NOT NULL," +
+                "status ENUM('PENDING', 'APPROVED', 'REJECTED') DEFAULT 'PENDING'," +
+                "submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                "reviewed_by INT NULL," +
+                "reviewed_at TIMESTAMP NULL," +
+                "admin_comments TEXT NULL," +
+                "FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE," +
+                "FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE," +
+                "FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE," +
+                "FOREIGN KEY (reviewed_by) REFERENCES users(id)," +
+                "UNIQUE KEY unique_leave_request (student_id, subject_id, class_id, date, time_slot))"
+            );
+            
             // Add time_slot column to existing attendance table if it doesn't exist
             try {
                 stmt.executeUpdate("ALTER TABLE attendance ADD COLUMN time_slot TIME NOT NULL DEFAULT '09:00:00'");

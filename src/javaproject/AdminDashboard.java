@@ -10,6 +10,8 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
 import java.sql.*;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 public class AdminDashboard {
@@ -56,6 +58,7 @@ public class AdminDashboard {
             createMenuButton("Manage Classes"),
             createMenuButton("Manage Students"),
             createMenuButton("Assign Teachers"),
+            createMenuButton("Leave Requests"),
             createMenuButton("Defaulter List")
         };
         
@@ -66,7 +69,8 @@ public class AdminDashboard {
         menuButtons[3].setOnAction(e -> showManageClasses());
         menuButtons[4].setOnAction(e -> showManageStudents());
         menuButtons[5].setOnAction(e -> showAssignTeachers());
-        menuButtons[6].setOnAction(e -> showDefaulterList());
+        menuButtons[6].setOnAction(e -> showLeaveRequests());
+        menuButtons[7].setOnAction(e -> showDefaulterList());
         
         menu.getChildren().addAll(menuButtons);
         
@@ -1402,6 +1406,474 @@ public class AdminDashboard {
             }
         } catch (Exception e) {
             e.printStackTrace();
+        }
+    }
+    
+    private void showLeaveRequests() {
+        VBox content = new VBox(20);
+        content.setPadding(new Insets(30));
+        
+        Label title = new Label("Leave Request Management");
+        title.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
+        
+        // Filter section
+        HBox filterSection = new HBox(15);
+        filterSection.setAlignment(Pos.CENTER_LEFT);
+        filterSection.setStyle("-fx-background-color: #f8f9fa; -fx-padding: 15; -fx-background-radius: 10;");
+        
+        ComboBox<String> statusFilter = new ComboBox<>();
+        statusFilter.getItems().addAll("All Requests", "PENDING", "APPROVED", "REJECTED");
+        statusFilter.setValue("PENDING");
+        statusFilter.setStyle("-fx-font-size: 14px;");
+        
+        Button refreshBtn = new Button("Refresh");
+        refreshBtn.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-cursor: hand; -fx-padding: 8 16;");
+        
+        Label countLabel = new Label();
+        countLabel.setStyle("-fx-font-size: 14px; -fx-text-fill: #7f8c8d;");
+        
+        filterSection.getChildren().addAll(new Label("Filter by Status:"), statusFilter, refreshBtn, countLabel);
+        
+        // Leave requests table
+        TableView<Map<String, Object>> requestsTable = new TableView<>();
+        requestsTable.setPrefHeight(500);
+        
+        TableColumn<Map<String, Object>, String> studentCol = new TableColumn<>("Student");
+        studentCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("student_name").toString()));
+        studentCol.setPrefWidth(150);
+        
+        TableColumn<Map<String, Object>, String> rollCol = new TableColumn<>("Roll No.");
+        rollCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("roll_no").toString()));
+        rollCol.setPrefWidth(100);
+        
+        TableColumn<Map<String, Object>, String> subjectCol = new TableColumn<>("Subject");
+        subjectCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("subject").toString()));
+        subjectCol.setPrefWidth(120);
+        
+        TableColumn<Map<String, Object>, String> classCol = new TableColumn<>("Class");
+        classCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("class_name").toString()));
+        classCol.setPrefWidth(100);
+        
+        TableColumn<Map<String, Object>, String> dateCol = new TableColumn<>("Date");
+        dateCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("date").toString()));
+        dateCol.setPrefWidth(100);
+        
+        TableColumn<Map<String, Object>, String> timeCol = new TableColumn<>("Time");
+        timeCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("time_slot").toString()));
+        timeCol.setPrefWidth(100);
+        
+        TableColumn<Map<String, Object>, String> reasonCol = new TableColumn<>("Reason");
+        reasonCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("reason").toString()));
+        reasonCol.setPrefWidth(200);
+        reasonCol.setCellFactory(col -> new TableCell<Map<String, Object>, String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setTooltip(null);
+                } else {
+                    setText(item.length() > 30 ? item.substring(0, 30) + "..." : item);
+                    setTooltip(new Tooltip(item));
+                }
+            }
+        });
+        
+        TableColumn<Map<String, Object>, String> statusCol = new TableColumn<>("Status");
+        statusCol.setCellFactory(col -> new TableCell<Map<String, Object>, String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || getTableRow() == null || getTableRow().getItem() == null) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    Map<String, Object> row = getTableRow().getItem();
+                    String status = row.get("status").toString();
+                    setText(status);
+                    
+                    switch (status) {
+                        case "PENDING":
+                            setStyle("-fx-background-color: #f39c12; -fx-text-fill: white; -fx-alignment: center;");
+                            break;
+                        case "APPROVED":
+                            setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-alignment: center;");
+                            break;
+                        case "REJECTED":
+                            setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white; -fx-alignment: center;");
+                            break;
+                        default:
+                            setStyle("");
+                    }
+                }
+            }
+        });
+        statusCol.setPrefWidth(100);
+        
+        TableColumn<Map<String, Object>, String> submittedCol = new TableColumn<>("Submitted");
+        submittedCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().get("submitted_at").toString()));
+        submittedCol.setPrefWidth(120);
+        
+        TableColumn<Map<String, Object>, Void> actionCol = new TableColumn<>("Actions");
+        actionCol.setCellFactory(col -> new TableCell<Map<String, Object>, Void>() {
+            private final HBox actionBox = new HBox(5);
+            private final Button approveBtn = new Button("Approve");
+            private final Button rejectBtn = new Button("Reject");
+            private final Button viewBtn = new Button("View");
+            
+            {
+                approveBtn.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-cursor: hand; -fx-font-size: 10px; -fx-padding: 4 8;");
+                rejectBtn.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white; -fx-cursor: hand; -fx-font-size: 10px; -fx-padding: 4 8;");
+                viewBtn.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-cursor: hand; -fx-font-size: 10px; -fx-padding: 4 8;");
+                
+                approveBtn.setOnAction(e -> {
+                    Map<String, Object> request = getTableView().getItems().get(getIndex());
+                    processLeaveRequest(request, "APPROVED", requestsTable, countLabel, statusFilter.getValue());
+                });
+                
+                rejectBtn.setOnAction(e -> {
+                    Map<String, Object> request = getTableView().getItems().get(getIndex());
+                    showRejectDialog(request, requestsTable, countLabel, statusFilter.getValue());
+                });
+                
+                viewBtn.setOnAction(e -> {
+                    Map<String, Object> request = getTableView().getItems().get(getIndex());
+                    showRequestDetails(request);
+                });
+                
+                actionBox.getChildren().addAll(approveBtn, rejectBtn, viewBtn);
+            }
+            
+            @Override
+            protected void updateItem(Void item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || getTableRow() == null || getTableRow().getItem() == null) {
+                    setGraphic(null);
+                } else {
+                    Map<String, Object> request = getTableRow().getItem();
+                    String status = request.get("status").toString();
+                    
+                    if ("PENDING".equals(status)) {
+                        actionBox.getChildren().clear();
+                        actionBox.getChildren().addAll(approveBtn, rejectBtn, viewBtn);
+                    } else {
+                        actionBox.getChildren().clear();
+                        actionBox.getChildren().add(viewBtn);
+                    }
+                    setGraphic(actionBox);
+                }
+            }
+        });
+        actionCol.setPrefWidth(150);
+        
+        requestsTable.getColumns().addAll(studentCol, rollCol, subjectCol, classCol, dateCol, timeCol, 
+                                         reasonCol, statusCol, submittedCol, actionCol);
+        
+        // Load data
+        Runnable loadRequests = () -> loadLeaveRequestsData(requestsTable, statusFilter.getValue(), countLabel);
+        loadRequests.run();
+        
+        // Event handlers
+        refreshBtn.setOnAction(e -> loadRequests.run());
+        statusFilter.setOnAction(e -> loadRequests.run());
+        
+        content.getChildren().addAll(title, filterSection, requestsTable);
+        
+        // Wrap content in ScrollPane to make it scrollable
+        ScrollPane scrollPane = new ScrollPane(content);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setFitToHeight(true);
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scrollPane.setStyle("-fx-background-color: transparent;");
+        
+        mainLayout.setCenter(scrollPane);
+    }
+    
+    private void loadLeaveRequestsData(TableView<Map<String, Object>> table, String statusFilter, Label countLabel) {
+        table.getItems().clear();
+        
+        try (Connection conn = DatabaseConfig.getConnection()) {
+            StringBuilder query = new StringBuilder(
+                "SELECT lr.*, u.name as student_name, u.username as roll_no, " +
+                "s.name as subject_name, cl.name as class_name " +
+                "FROM leave_requests lr " +
+                "JOIN users u ON lr.student_id = u.id " +
+                "JOIN subjects s ON lr.subject_id = s.id " +
+                "JOIN classes cl ON lr.class_id = cl.id "
+            );
+            
+            if (!"All Requests".equals(statusFilter)) {
+                query.append("WHERE lr.status = ? ");
+            }
+            
+            query.append("ORDER BY lr.submitted_at DESC");
+            
+            try (PreparedStatement ps = conn.prepareStatement(query.toString())) {
+                if (!"All Requests".equals(statusFilter)) {
+                    ps.setString(1, statusFilter);
+                }
+                
+                ResultSet rs = ps.executeQuery();
+                int count = 0;
+                
+                DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+                DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+                
+                while (rs.next()) {
+                    Map<String, Object> row = new HashMap<>();
+                    row.put("id", rs.getInt("id"));
+                    row.put("student_id", rs.getInt("student_id"));
+                    row.put("subject_id", rs.getInt("subject_id"));
+                    row.put("class_id", rs.getInt("class_id"));
+                    row.put("student_name", rs.getString("student_name"));
+                    row.put("roll_no", rs.getString("roll_no"));
+                    row.put("subject", rs.getString("subject_name"));
+                    row.put("class_name", rs.getString("class_name"));
+                    row.put("date", rs.getDate("date").toLocalDate().format(dateFormatter));
+                    row.put("date_obj", rs.getDate("date").toLocalDate());
+                    row.put("time_slot", formatTimeSlot(rs.getTime("time_slot").toString()));
+                    row.put("time_slot_obj", rs.getTime("time_slot"));
+                    row.put("reason", rs.getString("reason"));
+                    row.put("status", rs.getString("status"));
+                    row.put("submitted_at", rs.getTimestamp("submitted_at").toLocalDateTime().format(timeFormatter));
+                    row.put("admin_comments", rs.getString("admin_comments"));
+                    table.getItems().add(row);
+                    count++;
+                }
+                
+                countLabel.setText(count + " request(s) found");
+            }
+        } catch (Exception ex) {
+            countLabel.setText("Error loading requests: " + ex.getMessage());
+            ex.printStackTrace();
+        }
+    }
+    
+    private void processLeaveRequest(Map<String, Object> request, String newStatus, 
+                                   TableView<Map<String, Object>> table, Label countLabel, String statusFilter) {
+        try (Connection conn = DatabaseConfig.getConnection()) {
+            conn.setAutoCommit(false);
+            
+            try {
+                // Update leave request status
+                try (PreparedStatement ps = conn.prepareStatement(
+                    "UPDATE leave_requests SET status = ?, reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP " +
+                    "WHERE id = ?")) {
+                    
+                    ps.setString(1, newStatus);
+                    ps.setInt(2, admin.getId());
+                    ps.setInt(3, (Integer) request.get("id"));
+                    ps.executeUpdate();
+                }
+                
+                // If approved, update attendance record
+                if ("APPROVED".equals(newStatus)) {
+                    try (PreparedStatement ps = conn.prepareStatement(
+                        "UPDATE attendance SET status = 'PRESENT' " +
+                        "WHERE student_id = ? AND subject_id = ? AND class_id = ? AND date = ? AND time_slot = ?")) {
+                        
+                        ps.setInt(1, (Integer) request.get("student_id"));
+                        ps.setInt(2, (Integer) request.get("subject_id"));
+                        ps.setInt(3, (Integer) request.get("class_id"));
+                        ps.setDate(4, java.sql.Date.valueOf((LocalDate) request.get("date_obj")));
+                        ps.setTime(5, (java.sql.Time) request.get("time_slot_obj"));
+                        ps.executeUpdate();
+                    }
+                }
+                
+                conn.commit();
+                
+                // Show success message
+                Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                alert.setTitle("Success");
+                alert.setHeaderText("Leave Request " + newStatus);
+                alert.setContentText("The leave request has been " + newStatus.toLowerCase() + " successfully." +
+                    (newStatus.equals("APPROVED") ? " Student's attendance has been updated." : ""));
+                alert.showAndWait();
+                
+                // Refresh table
+                loadLeaveRequestsData(table, statusFilter, countLabel);
+                
+            } catch (Exception ex) {
+                conn.rollback();
+                throw ex;
+            }
+        } catch (Exception ex) {
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("Error");
+            alert.setHeaderText("Failed to process request");
+            alert.setContentText("Error: " + ex.getMessage());
+            alert.showAndWait();
+            ex.printStackTrace();
+        }
+    }
+    
+    private void showRejectDialog(Map<String, Object> request, TableView<Map<String, Object>> table, 
+                                Label countLabel, String statusFilter) {
+        Stage dialog = new Stage();
+        dialog.setTitle("Reject Leave Request");
+        dialog.setWidth(400);
+        dialog.setHeight(300);
+        
+        VBox content = new VBox(15);
+        content.setPadding(new Insets(20));
+        
+        Label title = new Label("Reject Leave Request");
+        title.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+        
+        Label studentInfo = new Label("Student: " + request.get("student_name") + " (" + request.get("roll_no") + ")");
+        Label requestInfo = new Label("Request: " + request.get("subject") + " - " + request.get("date") + " " + request.get("time_slot"));
+        
+        Label reasonLabel = new Label("Admin Comments (Optional):");
+        reasonLabel.setStyle("-fx-font-weight: bold;");
+        
+        TextArea commentsArea = new TextArea();
+        commentsArea.setPromptText("Enter reason for rejection (optional)...");
+        commentsArea.setPrefRowCount(4);
+        commentsArea.setWrapText(true);
+        
+        HBox buttonBox = new HBox(10);
+        buttonBox.setAlignment(Pos.CENTER);
+        
+        Button rejectBtn = new Button("Reject Request");
+        rejectBtn.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white; -fx-cursor: hand;");
+        
+        Button cancelBtn = new Button("Cancel");
+        cancelBtn.setStyle("-fx-background-color: #95a5a6; -fx-text-fill: white; -fx-cursor: hand;");
+        
+        buttonBox.getChildren().addAll(rejectBtn, cancelBtn);
+        
+        rejectBtn.setOnAction(e -> {
+            try (Connection conn = DatabaseConfig.getConnection()) {
+                try (PreparedStatement ps = conn.prepareStatement(
+                    "UPDATE leave_requests SET status = 'REJECTED', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, admin_comments = ? " +
+                    "WHERE id = ?")) {
+                    
+                    ps.setInt(1, admin.getId());
+                    ps.setString(2, commentsArea.getText().trim().isEmpty() ? null : commentsArea.getText().trim());
+                    ps.setInt(3, (Integer) request.get("id"));
+                    ps.executeUpdate();
+                    
+                    dialog.close();
+                    
+                    Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                    alert.setTitle("Success");
+                    alert.setHeaderText("Leave Request Rejected");
+                    alert.setContentText("The leave request has been rejected successfully.");
+                    alert.showAndWait();
+                    
+                    loadLeaveRequestsData(table, statusFilter, countLabel);
+                }
+            } catch (Exception ex) {
+                Alert alert = new Alert(Alert.AlertType.ERROR);
+                alert.setTitle("Error");
+                alert.setHeaderText("Failed to reject request");
+                alert.setContentText("Error: " + ex.getMessage());
+                alert.showAndWait();
+                ex.printStackTrace();
+            }
+        });
+        
+        cancelBtn.setOnAction(e -> dialog.close());
+        
+        content.getChildren().addAll(title, studentInfo, requestInfo, reasonLabel, commentsArea, buttonBox);
+        
+        Scene scene = new Scene(content);
+        dialog.setScene(scene);
+        dialog.show();
+    }
+    
+    private void showRequestDetails(Map<String, Object> request) {
+        Stage dialog = new Stage();
+        dialog.setTitle("Leave Request Details");
+        dialog.setWidth(500);
+        dialog.setHeight(400);
+        
+        VBox content = new VBox(15);
+        content.setPadding(new Insets(20));
+        
+        Label title = new Label("Leave Request Details");
+        title.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+        
+        GridPane detailsGrid = new GridPane();
+        detailsGrid.setHgap(15);
+        detailsGrid.setVgap(10);
+        
+        detailsGrid.add(new Label("Student:"), 0, 0);
+        detailsGrid.add(new Label(request.get("student_name").toString()), 1, 0);
+        detailsGrid.add(new Label("Roll Number:"), 0, 1);
+        detailsGrid.add(new Label(request.get("roll_no").toString()), 1, 1);
+        detailsGrid.add(new Label("Subject:"), 0, 2);
+        detailsGrid.add(new Label(request.get("subject").toString()), 1, 2);
+        detailsGrid.add(new Label("Class:"), 0, 3);
+        detailsGrid.add(new Label(request.get("class_name").toString()), 1, 3);
+        detailsGrid.add(new Label("Date:"), 0, 4);
+        detailsGrid.add(new Label(request.get("date").toString()), 1, 4);
+        detailsGrid.add(new Label("Time Slot:"), 0, 5);
+        detailsGrid.add(new Label(request.get("time_slot").toString()), 1, 5);
+        detailsGrid.add(new Label("Status:"), 0, 6);
+        detailsGrid.add(new Label(request.get("status").toString()), 1, 6);
+        detailsGrid.add(new Label("Submitted:"), 0, 7);
+        detailsGrid.add(new Label(request.get("submitted_at").toString()), 1, 7);
+        
+        // Style the labels
+        for (int i = 0; i < 8; i++) {
+            ((Label) detailsGrid.getChildren().get(i * 2)).setStyle("-fx-font-weight: bold;");
+        }
+        
+        Label reasonLabel = new Label("Reason:");
+        reasonLabel.setStyle("-fx-font-weight: bold;");
+        
+        TextArea reasonArea = new TextArea(request.get("reason").toString());
+        reasonArea.setEditable(false);
+        reasonArea.setPrefRowCount(3);
+        reasonArea.setWrapText(true);
+        
+        VBox reasonSection = new VBox(5, reasonLabel, reasonArea);
+        
+        // Admin comments if available
+        VBox commentsSection = new VBox();
+        if (request.get("admin_comments") != null && !request.get("admin_comments").toString().isEmpty()) {
+            Label commentsLabel = new Label("Admin Comments:");
+            commentsLabel.setStyle("-fx-font-weight: bold;");
+            
+            TextArea commentsArea = new TextArea(request.get("admin_comments").toString());
+            commentsArea.setEditable(false);
+            commentsArea.setPrefRowCount(2);
+            commentsArea.setWrapText(true);
+            
+            commentsSection.getChildren().addAll(commentsLabel, commentsArea);
+        }
+        
+        Button closeBtn = new Button("Close");
+        closeBtn.setStyle("-fx-background-color: #95a5a6; -fx-text-fill: white; -fx-cursor: hand;");
+        closeBtn.setOnAction(e -> dialog.close());
+        
+        HBox buttonBox = new HBox(closeBtn);
+        buttonBox.setAlignment(Pos.CENTER);
+        
+        content.getChildren().addAll(title, detailsGrid, reasonSection, commentsSection, buttonBox);
+        
+        ScrollPane scrollPane = new ScrollPane(content);
+        scrollPane.setFitToWidth(true);
+        
+        Scene scene = new Scene(scrollPane);
+        dialog.setScene(scene);
+        dialog.show();
+    }
+    
+    private String formatTimeSlot(String timeSlot) {
+        if (timeSlot == null) return "N/A";
+        
+        try {
+            // Convert "09:00:00" to "09:00-10:00"
+            String[] parts = timeSlot.split(":");
+            int hour = Integer.parseInt(parts[0]);
+            int nextHour = hour + 1;
+            return String.format("%02d:00-%02d:00", hour, nextHour);
+        } catch (Exception e) {
+            return timeSlot; // Return original if parsing fails
         }
     }
     
